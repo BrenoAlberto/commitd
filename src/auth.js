@@ -86,9 +86,9 @@ export class PatAuth {
    happen from a static page). Same four methods as PatAuth. */
 
 export const OAUTH = {
-  clientId: '',                 // public identifier of the commitd GitHub App
-  appSlug: 'commitd',
-  tokenService: '',             // https://commitd-token-service.<acct>.workers.dev
+  clientId: 'Iv23liO8GU9OD5FAGXOC',   // public identifier of the commitd-app GitHub App
+  appSlug: 'commitd-app',
+  tokenService: 'https://commitd-token-service.brenoapsdev.workers.dev',
 };
 export const oauthEnabled = () => !!(OAUTH.clientId && OAUTH.tokenService);
 

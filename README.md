@@ -70,24 +70,26 @@ Then enable **Settings → Pages → Source: GitHub Actions**.
 
 ## Connecting your GitHub
 
-GitHub Pages cannot hold an OAuth client secret, and GitHub's token endpoint sends no
-CORS headers — so a purely static site cannot complete the OAuth code exchange. That is
-the honest reason v1 uses a token rather than a "Sign in with GitHub" button.
+Two ways in, same four-method auth interface behind both:
 
-Create a **fine-grained personal access token** scoped to **one repository**:
+**Sign in with GitHub** (the short way): create the vault repository, click sign in,
+and GitHub asks you to install the commitd app on that one repository. No token to
+copy. GitHub's token endpoint sends no CORS headers, so the code → token exchange runs
+through a [stateless ~30-line worker](https://github.com/BrenoAlberto/commitd-token-service)
+that holds the app's client secret and stores nothing.
+
+**A fine-grained personal access token** (the self-custody way), scoped to **one
+repository**:
 
 | Permission | Why |
 |---|---|
 | **Contents: Read and write** | required — the vault's files |
 | **Administration: Read and write** | optional — only to flip the repo public/private from inside the app |
 
-The token lives in this tab by default. If you tick *remember on this device* it is
-encrypted with a passphrase (AES-GCM, PBKDF2 250k) before it touches `localStorage`.
-A bearer token for your GitHub account does not belong in `localStorage` in the clear.
-
-Auth sits behind a four-method interface (`signIn / getToken / identity / signOut`), so
-an OAuth provider backed by a ~30-line stateless function drops in later without the app
-noticing.
+Either credential lives in this tab by default. If you tick *remember on this device*
+it is encrypted with a passphrase (AES-GCM, PBKDF2 250k) before it touches
+`localStorage`. A bearer token for your GitHub account does not belong in
+`localStorage` in the clear.
 
 ## Private and public
 
