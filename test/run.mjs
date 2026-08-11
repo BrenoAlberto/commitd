@@ -18,6 +18,17 @@ page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
 
 const handler = mockGitHub({}, {});
 await page.route('https://api.github.com/**', (route, req) => handler(route, req));
+/* The OAuth dance, minus GitHub: authorize bounces straight back with a code,
+   and the token service hands over a mock token (CORS included — the app
+   fetches it cross-origin). */
+await page.route('https://github.com/login/oauth/authorize**', (route, req) => {
+  const state = new URL(req.url()).searchParams.get('state') || '';
+  route.fulfill({ status: 302, headers: { location: `${BASE}/?code=TESTCODE&state=${state}` } });
+});
+await page.route('https://commitd-token-service.brenoapsdev.workers.dev/**', (route, req) =>
+  route.fulfill({ status: 200, contentType: 'application/json',
+    headers: { 'access-control-allow-origin': '*' },
+    body: req.method() === 'OPTIONS' ? '' : JSON.stringify({ access_token: 'github_pat_TESTTOKEN' }) }));
 
 /* ── 1. landing ─────────────────────────────────────────── */
 await page.goto(BASE + '/');
@@ -25,16 +36,22 @@ await page.waitForTimeout(500);
 ok('landing renders', (await page.textContent('h1')).includes('git repository'));
 ok('no sidebar before auth', await page.evaluate(() => getComputedStyle(document.querySelector('.side')).display === 'none'));
 
-/* ── 2. onboarding creates the repo and bootstraps ──────── */
+/* ── 2. onboarding: sign in, guided install, discovery ───── */
 await page.click('[data-act="connect"]');
 await page.waitForTimeout(300);
-await page.fill('#oTok', 'github_pat_TESTTOKEN');
-await page.click('#oGo');
+ok('connect view offers sign-in', await page.isVisible('#oOAuth'));
+await page.click('#oOAuth');
 await page.waitForTimeout(1200);
-ok('signed in → today', page.url().includes('#/today'), page.url());
-ok('vault bootstrapped', await page.evaluate(() => !!window.__s?.vault) || true);
-const files = await page.evaluate(() => null);
-ok('repo created private', true);
+ok('no installation yet → guided install screen',
+   (await page.textContent('#main')).includes('Install commitd'), page.url());
+handler.state.exists = true;   /* the user made the vault and installed the app */
+await page.click('[data-act="recheck"]');
+await page.waitForTimeout(1600);
+ok('vault discovered + bootstrapped → today', page.url().includes('#/today'), page.url());
+ok('session persisted whole (identity + repo)', await page.evaluate(() => {
+  const s = JSON.parse(sessionStorage.getItem('commitd.oauth.session.v1') || 'null');
+  return s?.who?.login === 'testuser' && s?.who?.repo === 'commitd-vault';
+}));
 
 /* ── 3. create a branch through the wizard ──────────────── */
 await page.evaluate(() => document.querySelector('#newBranch').click());

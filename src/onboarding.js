@@ -3,8 +3,8 @@
 
 import { $, $$, esc } from './util.js';
 import { S, store } from './store.js';
-import { GitHub, PublicReader, GitHubError } from './github.js';
-import { PatAuth, OAuthAuth, OAUTH, oauthEnabled, tokenUrl } from './auth.js';
+import { GitHub, PublicReader } from './github.js';
+import { OAuthAuth, OAUTH, installUrl } from './auth.js';
 import * as V from './vault.js';
 import { toast, errToast, busy } from './ui.js';
 import { sechead } from './views.js';
@@ -14,14 +14,16 @@ export const DEFAULT_REPO = 'commitd-vault';
 /* ═══════════ landing ═══════════ */
 export function landingView() {
   return `<div class="center land">
-    <div class="kicker">a daemon for the habits you keep</div>
-    <h1>Your habits,<br>as a git repository.</h1>
-    <p class="sub">commitd is a habit tracker that treats your life like a repo. It runs entirely in your browser,
-      and stores every byte in a single GitHub repository that you own. No server, no database, no account with us —
-      because there is no us.</p>
-    <div class="cta">
-      <button class="btn btn-p" data-act="connect">Connect GitHub</button>
-      <button class="btn btn-g" data-act="viewpublic">View someone's public vault</button>
+    <div class="hero">
+      <div class="kicker">a daemon for the habits you keep</div>
+      <h1>Your habits,<br>as a git repository.</h1>
+      <p class="sub">commitd is a habit tracker that treats your life like a repo. It runs entirely in your browser,
+        and stores every byte in a single GitHub repository that you own. No server, no database, no account with us —
+        because there is no us.</p>
+      <div class="cta">
+        <button class="btn btn-p" data-act="connect">Connect GitHub</button>
+        <button class="btn btn-g" data-act="viewpublic">View someone's public vault</button>
+      </div>
     </div>
 
     <div class="pt"><h3>The idea</h3>
@@ -47,156 +49,128 @@ export function landingView() {
       </dl></div>
 
     <div class="pt"><h3>What it asks for</h3>
-      <p>A fine-grained GitHub token scoped to <b>one repository</b>, with permission to read and write that
-        repository's contents. Nothing else in your account is reachable with it. The token is held in this tab, and
-        only written to disk if you ask — and then only encrypted with a passphrase.</p>
-      <p class="muted" style="font-size:13px;margin-top:12px">Your vault is <b>private</b> when it is created. You can
-        make it public later, and then anyone with the link gets a read-only view.</p></div>
+      <p>You install the commitd GitHub App on <b>one repository</b> — the vault — and that is everything it can
+        ever see. Nothing else in your account is reachable. The session lives in this tab; signing back in is one
+        click, because GitHub remembers the authorization.</p>
+      <p class="muted" style="font-size:13px;margin-top:12px">Your vault stays <b>private</b> unless you decide
+        otherwise. Make it public later and anyone with the link gets a read-only view.</p></div>
   </div>`;
 }
 
 /* ═══════════ connect ═══════════ */
 export function connectView() {
-  const repo = S.pendingRepo || DEFAULT_REPO;
   return `<div class="center land">
     <button class="back" data-act="home">← back</button>
     <h1 style="font-size:clamp(30px,6vw,44px)">Connect your GitHub</h1>
-    <p class="sub" style="font-size:15.5px">Three steps, about a minute. commitd will create one private repository
-      and never touch anything else.</p>
+    <p class="sub" style="font-size:15.5px">Two clicks. commitd keeps every byte in one private repository — the
+      vault — and can only ever see the repositories you install it on.</p>
     <div class="steps" style="margin-top:26px">
       <div class="step"><span class="n">1</span><div>
-        <h4>Name the vault — and create it</h4>
-        <p>One repository holds every branch. Create it on GitHub first, <b>private</b>, and tick
-          <i>Add a README</i> — a token scoped to selected repositories can only see repositories
-          that already exist.</p>
-        <input class="inp" id="oRepo" value="${esc(repo)}" style="max-width:320px" spellcheck="false">
-        <div style="margin-top:10px"><a class="btn btn-g" id="oNewRepo" href="https://github.com/new?name=${esc(repo)}" target="_blank" rel="noopener">Create it on GitHub ↗</a></div></div></div>
-      ${oauthEnabled() ? `<div class="step"><span class="n">2</span><div>
+        <h4>Create the vault — once</h4>
+        <p>One private repository holds every habit. Already made one? Skip straight to step 2.</p>
+        <div style="margin-top:12px"><a class="btn btn-g" href="https://github.com/new?name=${DEFAULT_REPO}" target="_blank" rel="noopener">Create ${DEFAULT_REPO} on GitHub ↗</a></div>
+        <p class="hint">Keep it <b>Private</b> and tick <b>Add a README</b>, then come back to this tab.</p></div></div>
+      <div class="step"><span class="n">2</span><div>
         <h4>Sign in with GitHub</h4>
-        <p>GitHub will ask you to install the commitd app on that one repository — pick it, authorize,
-          and you land back here signed in. No token to copy, nothing to configure.</p>
-        <div style="margin-top:12px"><button class="btn btn-p" id="oOAuth">Sign in with GitHub</button></div>
-        <p class="hint">Prefer to hold the credential yourself? The fine-grained-token way below works too.</p>
-      </div></div>` : ''}
-      <div class="step"><span class="n">${oauthEnabled() ? '3' : '2'}</span><div>
-        <h4>Create a fine-grained token</h4>
-        <p>Opens GitHub with the form pre-filled. Set <b>Repository access → Only select repositories</b>, pick
-          your vault, then grant exactly:</p>
-        <div class="scopes">
-          <div><b>Contents</b> · Read and write <span class="muted">— the vault's files</span></div>
-          <div><b>Administration</b> · Read and write <span class="muted">— optional, only to flip public/private from here</span></div>
-        </div>
-        <p class="hint">A token with only <b>Contents</b> works fine; you'd just change visibility on github.com instead.</p>
-        <div style="margin-top:12px"><a class="btn btn-g" href="${tokenUrl(repo)}" target="_blank" rel="noopener">Open GitHub token page ↗</a></div>
-      </div></div>
-      <div class="step"><span class="n">${oauthEnabled() ? '4' : '3'}</span><div>
-        <h4>Paste it back</h4>
-        <input class="inp" id="oTok" type="password" placeholder="github_pat_…" spellcheck="false" autocomplete="off">
-        <label class="row" style="margin-top:12px;font-size:13px;cursor:pointer">
-          <input type="checkbox" id="oRemember"> Remember on this device</label>
-        <div id="oPassWrap" style="display:none;margin-top:10px">
-          <input class="inp" id="oPass" type="password" placeholder="passphrase to encrypt it" autocomplete="new-password">
-          <p class="hint">Stored encrypted (AES-GCM, PBKDF2 250k). Without a passphrase the token stays in this tab
-            only — a bearer token for your GitHub account does not belong in localStorage in the clear.</p></div>
-        <div id="oErr"></div>
-        <div class="row" style="margin-top:16px"><button class="btn btn-p" id="oGo">Connect</button></div>
-      </div></div>
+        <p>GitHub asks where to install commitd — choose <b>Only select repositories</b> and pick just the vault.
+          commitd finds it from there by itself: nothing to paste, nothing to configure.</p>
+        <div style="margin-top:12px"><button class="btn btn-p" id="oOAuth">Sign in with GitHub</button></div></div></div>
     </div></div>`;
 }
-
-export function wireConnect(onReady) {
-  $('#oRemember').onchange = (e) => { $('#oPassWrap').style.display = e.target.checked ? '' : 'none'; };
-  $('#oRepo').oninput = (e) => { S.pendingRepo = e.target.value.trim();
-    $('#oNewRepo')?.setAttribute('href', `https://github.com/new?name=${encodeURIComponent(S.pendingRepo || DEFAULT_REPO)}`); };
-  const oa = $('#oOAuth');
-  if (oa) oa.onclick = () => OAuthAuth.begin($('#oRepo').value.trim() || DEFAULT_REPO);
-  $('#oGo').onclick = async () => {
-    const token = $('#oTok').value.trim(), repo = ($('#oRepo').value.trim() || DEFAULT_REPO);
-    const remember = $('#oRemember').checked, passphrase = $('#oPass')?.value || '';
-    const err = (m) => { $('#oErr').innerHTML = `<div class="err">${esc(m)}</div>`; };
-    $('#oErr').innerHTML = '';
-    if (!token) return err('Paste the token first.');
-    if (remember && !passphrase) return err('Choose a passphrase, or untick "remember" to keep the token in this tab only.');
-    busy('checking the token');
-    try {
-      const probe = new GitHub({ token });
-      const user = await probe.user();
-      const gh = new GitHub({ token, owner: user.login, repo });
-      let info = null;
-      try { info = await gh.repoInfo(); }
-      catch (e) { if (e.status !== 404) throw e; }
-      let created = false;
-      if (!info) {
-        busy('creating the vault (private)');
-        try { info = await gh.createRepo(true); created = true; }
-        catch (e) {
-          /* A fine-grained token scoped to selected repositories can never
-             create a repo (it cannot be selected before it exists), and one
-             scoped to an existing repo cannot see this missing one. Hand the
-             user the one-click fix instead of a bare 403. */
-          if (e.status !== 403 && e.status !== 404 && e.status !== 422) throw e;
-          busy(null);
-          $('#oErr').innerHTML = `<div class="err">This token cannot create <span class="mono">${esc(repo)}</span> —
-            fine-grained tokens scoped to selected repositories never can.
-            <a href="https://github.com/new?name=${esc(repo)}" target="_blank" rel="noopener">Create it on GitHub ↗</a>
-            (keep it <b>private</b>, tick <i>Add a README</i>), check the token has access to it, then hit Connect again.</div>`;
-          return;
-        }
-      }
-      gh.branch = info.default_branch || 'main';
-      if (created) { busy('waiting for GitHub to initialise it'); await gh.waitForRef(); }
-      busy('reading the vault');
-      let vault = await V.loadVault(gh, { onProgress: busy });
-      if (!vault) {
-        busy('bootstrapping');
-        await gh.commitFiles(V.bootstrapFiles(user.login), 'commitd: initialise vault');
-        vault = await V.loadVault(gh, { onProgress: busy });
-      }
-      vault.repo = { name: repo, private: info.private, url: info.html_url, owner: user.login };
-      const auth = new PatAuth();
-      await auth.persist(token, { login: user.login, avatar: user.avatar_url, repo }, { remember, passphrase });
-      busy(null);
-      onReady({ gh, vault, auth });
-    } catch (e) {
-      busy(null);
-      err(e instanceof GitHubError && e.status === 401 ? 'GitHub rejected that token. Check it was copied whole and has not expired.'
-        : e.status === 403 ? 'The token is valid but lacks permission. It needs Contents: read and write on the vault repository.'
-        : e.message || String(e));
-    }
-  };
+export function wireConnect() {
+  const b = $('#oOAuth');
+  if (b) b.onclick = () => OAuthAuth.begin();
 }
 
-/* ═══════════ oauth completion ═══════════
-   The redirect back from GitHub lands here with a single-use code. An App
-   user token cannot create user repos, so a missing vault gets instructions
-   rather than an attempt. */
+/* ═══════════ oauth: exchange, discovery, vault open ═══════════
+   After sign-in the app never asks which repository the vault is — it lists
+   what the token was installed on. Zero grants → guided install screen.
+   Several → a picker. Exactly one → that's the vault. */
 export async function completeOAuth(landing, onReady, onError) {
   busy('finishing sign-in');
   try {
     const auth = new OAuthAuth();
     await auth.complete(landing.code);
+    const user = await new GitHub({ token: auth.getToken() }).user();
+    /* Persist identity immediately — a session must never exist half-written,
+       or the next reload boots into a crash. */
+    auth.persist(auth.bundle, { login: user.login, avatar: user.avatar_url || '', repo: null, repoOwner: null });
+    S.auth = auth;
+    await resolveVault(auth, onReady, onError);
+  } catch (e) { busy(null); onError(e.message || String(e)); }
+}
+
+export async function resolveVault(auth, onReady, onError) {
+  busy('finding your vault');
+  try {
     const probe = new GitHub({ token: auth.getToken() });
-    const user = await probe.user();
-    const repo = landing.repo || DEFAULT_REPO;
-    const gh = new GitHub({ token: auth.getToken(), owner: user.login, repo });
-    let info = null;
-    try { info = await gh.repoInfo(); }
-    catch (e) { if (e.status !== 404) throw e; }
-    if (!info) throw new Error(`GitHub can't see ${user.login}/${repo}. Create it at github.com/new?name=${repo} `
-      + `(private, tick "Add a README"), make sure the commitd app is installed on it `
-      + `(github.com/apps/${OAUTH.appSlug}), then sign in again.`);
-    gh.branch = info.default_branch || 'main';
+    const inst = await probe.req('/user/installations');
+    const repos = [];
+    for (const i of (inst.installations || []))
+      repos.push(...(((await probe.req(`/user/installations/${i.id}/repositories`)).repositories) || []));
+    if (!repos.length) { busy(null); S.route = { name: 'install' }; store.emit(); return; }
+    if (repos.length > 1) { busy(null); S.pickRepos = repos; S.route = { name: 'pickrepo' }; store.emit(); return; }
+    await finishWithRepo(auth, repos[0], onReady, onError);
+  } catch (e) { busy(null); onError(e.message || String(e)); }
+}
+
+export async function finishWithRepo(auth, repo, onReady, onError) {
+  busy('opening the vault');
+  try {
+    const who = auth.identity();
+    const owner = repo.owner?.login || who.login;
+    const gh = new GitHub({ token: auth.getToken(), owner, repo: repo.name, branch: repo.default_branch || 'main' });
     let vault = await V.loadVault(gh, { onProgress: busy });
     if (!vault) {
-      busy('bootstrapping');
-      await gh.commitFiles(V.bootstrapFiles(user.login), 'commitd: initialise vault');
+      busy('bootstrapping the vault');
+      await gh.waitForRef();
+      await gh.commitFiles(V.bootstrapFiles(who.login), 'commitd: initialise vault');
       vault = await V.loadVault(gh, { onProgress: busy });
     }
-    vault.repo = { name: repo, private: info.private, url: info.html_url, owner: user.login };
-    await auth.persist(auth.bundle, { login: user.login, avatar: user.avatar_url, repo }, {});
+    vault.repo = { name: repo.name, private: repo.private !== false, owner,
+      url: repo.html_url || `https://github.com/${owner}/${repo.name}` };
+    auth.persist(auth.bundle, { ...who, repo: repo.name, repoOwner: owner });
     busy(null);
     onReady({ gh, vault, auth });
   } catch (e) { busy(null); onError(e.message || String(e)); }
+}
+
+/* Signed in, but commitd is not installed anywhere yet. */
+export function installView() {
+  const login = S.auth?.identity()?.login || '';
+  return `<div class="center land">
+    <h1 style="font-size:clamp(30px,5vw,42px)">One more step, ${esc(login)}</h1>
+    <p class="sub" style="font-size:15.5px">You're signed in, but commitd isn't installed on any repository yet —
+      and installing it on the vault is the thing that grants access. commitd can only ever see the repositories
+      you install it on.</p>
+    <div class="steps" style="margin-top:26px">
+      <div class="step"><span class="n">1</span><div>
+        <h4>Have a vault repository?</h4>
+        <p>If not, create it now — private, with a README.</p>
+        <div style="margin-top:12px"><a class="btn btn-g" href="https://github.com/new?name=${DEFAULT_REPO}" target="_blank" rel="noopener">Create ${DEFAULT_REPO} on GitHub ↗</a></div></div></div>
+      <div class="step"><span class="n">2</span><div>
+        <h4>Install commitd on it</h4>
+        <p>Choose <b>Only select repositories</b> → the vault. GitHub sends you straight back here.</p>
+        <div style="margin-top:12px"><a class="btn btn-p" href="${installUrl()}">Install commitd on the vault ↗</a></div>
+        <p class="hint">Installed it in another tab and landed back here? <a data-act="recheck">Check again</a>.</p></div></div>
+    </div>
+    <div style="margin-top:26px"><button class="peek" data-act="signout">sign out instead</button></div>
+  </div>`;
+}
+
+/* Installed on more than one repository — habits live in exactly one. */
+export function pickRepoView() {
+  return `<div class="center land">
+    <h1 style="font-size:clamp(30px,5vw,42px)">Which one is the vault?</h1>
+    <p class="sub" style="font-size:15.5px">commitd is installed on ${S.pickRepos.length} repositories. Habit data
+      lives in exactly one — pick it. (You can trim the installation to a single repository any time on GitHub.)</p>
+    <div class="steps" style="margin-top:22px">
+      ${S.pickRepos.map((r, i) => `<button class="btn btn-g" data-pickrepo="${i}" style="justify-content:flex-start;width:100%;max-width:420px;margin-bottom:8px">
+        <span class="mono">${esc(r.owner?.login || '')}/${esc(r.name)}</span>${r.private === false ? '<span class="muted" style="margin-left:8px">public</span>' : ''}
+      </button>`).join('')}
+    </div>
+    <div style="margin-top:22px"><button class="peek" data-act="signout">sign out instead</button></div>
+  </div>`;
 }
 
 /* ═══════════ account & vault settings ═══════════ */
@@ -243,11 +217,12 @@ export function accountView(v) {
       <div class="sub">Reads are ETag-cached, so a warm load costs 304s. A heavy day is about 40 requests.</div></div>
       <span class="rate">${rate ? `${rate.remaining} / 5000 left` : '—'}</span></div>
 
-    ${sechead('Token')}
+    ${sechead('Session')}
     <div class="srow"><div><div class="k">Signed in as ${esc(S.auth?.identity()?.login || '')}</div>
-      <div class="sub">Scoped to this repository only. ${localStorage.getItem('commitd.vault.v1') ? 'Stored encrypted on this device.' : 'Held in this tab only.'}</div></div>
-      <div class="row"><button class="btn btn-g" data-act="signout">sign out</button>
-        <button class="btn btn-d" data-act="forget">forget this device</button></div></div>
+      <div class="sub">Through the commitd GitHub App — it sees this repository and nothing else. The session lives
+        in this tab; signing back in is one click.</div></div>
+      <div class="row"><a class="btn btn-g" href="https://github.com/apps/${OAUTH.appSlug}" target="_blank" rel="noopener">manage on GitHub</a>
+        <button class="btn btn-d" data-act="signout">sign out</button></div></div>
   </div>`;
 }
 

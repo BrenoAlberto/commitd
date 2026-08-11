@@ -8,12 +8,21 @@ const ctx = await br.newContext({ viewport:{width:412,height:915}, isMobile:true
 const page = await ctx.newPage();
 const h = mockGitHub({}, {});
 await page.route('https://api.github.com/**', (r,q) => h(r,q));
+h.state.exists = true;   /* vault repo already made and app installed */
+await page.route('https://github.com/login/oauth/authorize**', (route, req) => {
+  const state = new URL(req.url()).searchParams.get('state') || '';
+  route.fulfill({ status: 302, headers: { location: `http://localhost:8137/?code=TESTCODE&state=${state}` } });
+});
+await page.route('https://commitd-token-service.brenoapsdev.workers.dev/**', (route, req) =>
+  route.fulfill({ status: 200, contentType: 'application/json',
+    headers: { 'access-control-allow-origin': '*' },
+    body: req.method() === 'OPTIONS' ? '' : JSON.stringify({ access_token: 'github_pat_TESTTOKEN' }) }));
 await page.goto('http://localhost:8137/'); await page.waitForTimeout(500);
 await page.screenshot({ path:'test/shot-landing.png' });
 ok('no horizontal overflow on the landing page', !(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth+1)));
 await page.click('[data-act="connect"]'); await page.waitForTimeout(300);
 await page.screenshot({ path:'test/shot-connect.png' });
-await page.fill('#oTok','t'); await page.click('#oGo'); await page.waitForTimeout(1500);
+await page.click('#oOAuth'); await page.waitForTimeout(2200);
 ok('tab bar appears once signed in', await page.evaluate(() => getComputedStyle(document.querySelector('.tabbar')).display === 'flex'));
 ok('sidebar hidden on a phone', await page.evaluate(() => getComputedStyle(document.querySelector('.side')).display === 'none'));
 await page.screenshot({ path:'test/shot-today.png' });

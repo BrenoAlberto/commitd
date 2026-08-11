@@ -4,7 +4,7 @@
 import { $, $$, esc, key, parse, addD, fmtDate, rel } from './util.js';
 import { S, store, setTheme } from './store.js';
 import { GitHub } from './github.js';
-import { PatAuth, OAuthAuth, oauthEnabled } from './auth.js';
+import { OAuthAuth } from './auth.js';
 import * as V from './vault.js';
 import * as M from './model.js';
 import * as A from './actions.js';
@@ -58,6 +58,9 @@ function chrome() {
 }
 function sidebar() {
   const v = S.vault, side = $('.side');
+  /* No vault → no sidebar; the grid must give its column back or every
+     pre-auth screen renders in a 238px strip. */
+  $('.layout').classList.toggle('solo', !v);
   if (!v) { side.style.display = 'none'; return; }
   side.style.display = '';
   $('#headChip').innerHTML = `<span class="mono">HEAD →</span> <b>${fmtDate(parse(v.today))}</b>`;
@@ -105,6 +108,8 @@ function render() {
   else if (r.name === 'pubprompt')     main.innerHTML = onb.publicPrompt();
   else if (r.name === 'error')         main.innerHTML = `<div class="center land"><h1 style="font-size:34px">That didn't work</h1>
       <div class="err">${esc(S.error)}</div><button class="btn btn-g" data-act="home">back</button></div>`;
+  else if (r.name === 'install')       main.innerHTML = onb.installView();
+  else if (r.name === 'pickrepo')      main.innerHTML = onb.pickRepoView();
   else if (!v)                          main.innerHTML = onb.landingView();
   else if (r.name === 'branch') {
     const b = v.branches.find(x => x.id === r.branch);
@@ -179,9 +184,9 @@ function wire() {
   const lf = $('#lFilter'); if (lf) lf.oninput = () => { S.logFilter = lf.value; S.logN = 40; render();
     const n = $('#lFilter'); if (n) { n.focus(); n.setSelectionRange(S.logFilter.length, S.logFilter.length); } };
   $$('[data-act]').forEach(el => el.onclick = () => act(el.dataset.act));
-  if (S.route.name === 'connect') onb.wireConnect(({ gh, vault, auth }) => {
-    S.gh = gh; S.vault = vault; S.auth = auth; S.readonly = false; go('#/today');
-  });
+  $$('[data-pickrepo]').forEach(el => el.onclick = () =>
+    onb.finishWithRepo(S.auth, S.pickRepos[+el.dataset.pickrepo], onReadyVault, onErrorVault));
+  if (S.route.name === 'connect') onb.wireConnect();
   if (S.route.name === 'pubprompt') $('#pubGo').onclick = () =>
     go(`#/u/${$('#pubOwner').value.trim()}/${$('#pubRepo').value.trim() || onb.DEFAULT_REPO}`);
 }
@@ -195,8 +200,8 @@ function act(name) {
     case 'rebuild': A.rebuildIndex(); break;
     case 'more': S.logN = (S.logN || 40) + 40; render(); break;
     case 'copy': { const i = $('#shareUrl'); i.select(); navigator.clipboard?.writeText(i.value); toast('Link copied'); break; }
-    case 'signout': S.auth?.signOut(); S.vault = null; S.gh = null; go('#/'); break;
-    case 'forget': S.auth?.signOut({ forget: true }); S.vault = null; S.gh = null; toast('Token removed from this device'); go('#/'); break;
+    case 'signout': S.auth?.signOut(); S.vault = null; S.gh = null; S.route = { name: 'home' }; location.hash = '#/'; render(); break;
+    case 'recheck': onb.resolveVault(S.auth, onReadyVault, onErrorVault); break;
   }
 }
 /* Visibility is a one-way door for anything already read, so it asks. */
@@ -340,57 +345,40 @@ async function boot() {
   store.on(() => render());
 
   /* Coming back from GitHub's OAuth redirect? Finish the exchange first. */
-  const landing = oauthEnabled() && OAuthAuth.landing();
-  if (landing) {
-    return onb.completeOAuth(landing,
-      ({ gh, vault, auth }) => { S.gh = gh; S.vault = vault; S.auth = auth; S.readonly = false; go('#/today'); },
-      (msg) => { S.route = { name: 'error' }; S.error = msg; render(); });
-  }
+  const landing = OAuthAuth.landing();
+  if (landing) return onb.completeOAuth(landing, onReadyVault, onErrorVault);
 
   const r = parseHash();
   if (r.name === 'public') return route();
 
-  const oauth = new OAuthAuth();
-  if (oauth.state() === 'session' && await oauth.restore()) {
-    if (oauth.stale()) { try { await oauth.refresh(); } catch { /* expired: fall through to sign-in */ } }
-    if (oauth.getToken()) { S.auth = oauth; return openVault(oauth); }
+  const auth = new OAuthAuth(); S.auth = auth;
+  if (auth.state() === 'session' && await auth.restore()) {
+    if (auth.stale()) { try { await auth.refresh(); } catch { auth.signOut(); } }
+    if (auth.getToken()) {
+      /* Signed in but the vault was never resolved (closed the tab on the
+         install screen, say) — pick up where that left off. */
+      if (!auth.identity()?.repo) return onb.resolveVault(auth, onReadyVault, onErrorVault);
+      return openVault(auth);
+    }
   }
-  if (oauth.state() === 'locked') { S.auth = oauth; return unlockScreen(oauth); }
-
-  const auth = new PatAuth(); S.auth = auth;
-  const st = auth.state();
-  if (st === 'session' && await auth.restore()) return openVault(auth);
-  if (st === 'locked') return unlockScreen(auth);
   S.route = r.name === 'connect' ? r : { name: 'home' }; render();
 }
-function unlockScreen(auth) {
-  const who = auth.meta();
-  S.route = { name: 'boot' }; render();
-  $('#main').innerHTML = `<div class="center land"><h1 style="font-size:34px">Welcome back${who?.login ? `, ${esc(who.login)}` : ''}</h1>
-    <p class="sub">Your token is encrypted on this device. Unlock it with your passphrase.</p>
-    <div class="row" style="margin-top:20px"><input class="inp" id="uPass" type="password" placeholder="passphrase"
-      style="max-width:280px"><button class="btn btn-p" id="uGo">unlock</button></div>
-    <div id="uErr"></div>
-    <div style="margin-top:22px"><button class="peek" id="uForget">forget this device instead</button></div></div>`;
-  const tryUnlock = async () => {
-    try { await auth.unlock($('#uPass').value); await openVault(auth); }
-    catch { $('#uErr').innerHTML = '<div class="err">That passphrase does not decrypt the stored token.</div>'; }
-  };
-  $('#uGo').onclick = tryUnlock;
-  $('#uPass').onkeydown = (e) => { if (e.key === 'Enter') tryUnlock(); };
-  $('#uForget').onclick = () => { auth.signOut({ forget: true }); location.hash = '#/'; location.reload(); };
-  setTimeout(() => $('#uPass').focus(), 60);
+function onReadyVault({ gh, vault, auth }) {
+  S.gh = gh; S.vault = vault; S.auth = auth; S.readonly = false;
+  location.hash === '#/today' ? route() : go('#/today');
 }
+function onErrorVault(msg) { S.route = { name: 'error' }; S.error = msg; render(); }
 async function openVault(auth) {
   const who = auth.identity();
+  if (!who?.login || !who?.repo) { auth.signOut(); S.route = { name: 'home' }; render(); return; }
   S.route = { name: 'boot' }; S.busy = 'opening vault'; render();
-  const gh = new GitHub({ token: auth.getToken(), owner: who.login, repo: who.repo });
+  const gh = new GitHub({ token: auth.getToken(), owner: who.repoOwner || who.login, repo: who.repo });
   try {
     const info = await gh.repoInfo();
     gh.branch = info.default_branch || 'main';
     const vault = await V.loadVault(gh, { onProgress: (m) => { S.busy = m; render(); } });
     if (!vault) throw new Error('That repository is not a commitd vault.');
-    vault.repo = { name: who.repo, private: info.private, url: info.html_url, owner: who.login };
+    vault.repo = { name: who.repo, private: info.private, url: info.html_url, owner: who.repoOwner || who.login };
     S.gh = gh; S.vault = vault; S.readonly = false;
     route();
   } catch (e) {

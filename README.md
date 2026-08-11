@@ -70,26 +70,18 @@ Then enable **Settings → Pages → Source: GitHub Actions**.
 
 ## Connecting your GitHub
 
-Two ways in, same four-method auth interface behind both:
+Create the vault repository (private, with a README), click **Sign in with GitHub**,
+and install the commitd app on that one repository when GitHub asks. That install is
+the entire permission model: commitd sees exactly the repositories it is installed
+on, and the app discovers the vault from the installation by itself — there is
+nothing to paste and nothing to configure.
 
-**Sign in with GitHub** (the short way): create the vault repository, click sign in,
-and GitHub asks you to install the commitd app on that one repository. No token to
-copy. GitHub's token endpoint sends no CORS headers, so the code → token exchange runs
+GitHub's token endpoint sends no CORS headers, so the code → token exchange runs
 through a [stateless ~30-line worker](https://github.com/BrenoAlberto/commitd-token-service)
-that holds the app's client secret and stores nothing.
-
-**A fine-grained personal access token** (the self-custody way), scoped to **one
-repository**:
-
-| Permission | Why |
-|---|---|
-| **Contents: Read and write** | required — the vault's files |
-| **Administration: Read and write** | optional — only to flip the repo public/private from inside the app |
-
-Either credential lives in this tab by default. If you tick *remember on this device*
-it is encrypted with a passphrase (AES-GCM, PBKDF2 250k) before it touches
-`localStorage`. A bearer token for your GitHub account does not belong in
-`localStorage` in the clear.
+that holds the app's client secret, stores nothing, and logs nothing. The resulting
+session lives in the tab; signing back in is one click because GitHub remembers the
+authorization. Auth sits behind a four-method interface, so another provider drops
+in without the app noticing.
 
 ## Private and public
 

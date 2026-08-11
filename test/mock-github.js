@@ -25,6 +25,11 @@ export function mockGitHub(files = {}, opts = {}) {
     const R = (b, s) => route.fulfill(json(b, s));
 
     if (p === '/user') return R({ login: 'testuser', avatar_url: '' });
+    if (p === '/user/installations' && m === 'GET')
+      return R(state.exists ? { total_count: 1, installations: [{ id: 1 }] } : { total_count: 0, installations: [] });
+    if (p === '/user/installations/1/repositories' && m === 'GET')
+      return R({ repositories: state.exists ? [{ name: 'commitd-vault', private: state.private, default_branch: 'main',
+        html_url: 'https://github.com/testuser/commitd-vault', owner: { login: 'testuser' } }] : [] });
     if (/^\/repos\/[^/]+\/[^/]+$/.test(p) && m === 'GET') {
       if (!state.exists) return R({ message: 'Not Found' }, 404);
       return R({ name: 'commitd-vault', private: state.private, default_branch: 'main',
