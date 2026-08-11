@@ -65,13 +65,16 @@ export function connectView() {
       and never touch anything else.</p>
     <div class="steps" style="margin-top:26px">
       <div class="step"><span class="n">1</span><div>
-        <h4>Name the vault</h4>
-        <p>One repository holds every branch. Private by default.</p>
-        <input class="inp" id="oRepo" value="${esc(repo)}" style="max-width:320px" spellcheck="false"></div></div>
+        <h4>Name the vault — and create it</h4>
+        <p>One repository holds every branch. Create it on GitHub first, <b>private</b>, and tick
+          <i>Add a README</i> — a token scoped to selected repositories can only see repositories
+          that already exist.</p>
+        <input class="inp" id="oRepo" value="${esc(repo)}" style="max-width:320px" spellcheck="false">
+        <div style="margin-top:10px"><a class="btn btn-g" id="oNewRepo" href="https://github.com/new?name=${esc(repo)}" target="_blank" rel="noopener">Create it on GitHub ↗</a></div></div></div>
       <div class="step"><span class="n">2</span><div>
         <h4>Create a fine-grained token</h4>
-        <p>Opens GitHub with the form pre-filled. Set <b>Repository access → Only select repositories</b> and pick
-          (or leave room for) your vault, then grant exactly:</p>
+        <p>Opens GitHub with the form pre-filled. Set <b>Repository access → Only select repositories</b>, pick
+          your vault, then grant exactly:</p>
         <div class="scopes">
           <div><b>Contents</b> · Read and write <span class="muted">— the vault's files</span></div>
           <div><b>Administration</b> · Read and write <span class="muted">— optional, only to flip public/private from here</span></div>
@@ -96,7 +99,8 @@ export function connectView() {
 
 export function wireConnect(onReady) {
   $('#oRemember').onchange = (e) => { $('#oPassWrap').style.display = e.target.checked ? '' : 'none'; };
-  $('#oRepo').oninput = (e) => { S.pendingRepo = e.target.value.trim(); };
+  $('#oRepo').oninput = (e) => { S.pendingRepo = e.target.value.trim();
+    $('#oNewRepo')?.setAttribute('href', `https://github.com/new?name=${encodeURIComponent(S.pendingRepo || DEFAULT_REPO)}`); };
   $('#oGo').onclick = async () => {
     const token = $('#oTok').value.trim(), repo = ($('#oRepo').value.trim() || DEFAULT_REPO);
     const remember = $('#oRemember').checked, passphrase = $('#oPass')?.value || '';
@@ -113,7 +117,23 @@ export function wireConnect(onReady) {
       try { info = await gh.repoInfo(); }
       catch (e) { if (e.status !== 404) throw e; }
       let created = false;
-      if (!info) { busy('creating the vault (private)'); info = await gh.createRepo(true); created = true; }
+      if (!info) {
+        busy('creating the vault (private)');
+        try { info = await gh.createRepo(true); created = true; }
+        catch (e) {
+          /* A fine-grained token scoped to selected repositories can never
+             create a repo (it cannot be selected before it exists), and one
+             scoped to an existing repo cannot see this missing one. Hand the
+             user the one-click fix instead of a bare 403. */
+          if (e.status !== 403 && e.status !== 404 && e.status !== 422) throw e;
+          busy(null);
+          $('#oErr').innerHTML = `<div class="err">This token cannot create <span class="mono">${esc(repo)}</span> —
+            fine-grained tokens scoped to selected repositories never can.
+            <a href="https://github.com/new?name=${esc(repo)}" target="_blank" rel="noopener">Create it on GitHub ↗</a>
+            (keep it <b>private</b>, tick <i>Add a README</i>), check the token has access to it, then hit Connect again.</div>`;
+          return;
+        }
+      }
       gh.branch = info.default_branch || 'main';
       if (created) { busy('waiting for GitHub to initialise it'); await gh.waitForRef(); }
       busy('reading the vault');
