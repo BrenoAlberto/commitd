@@ -80,6 +80,107 @@ export class PatAuth {
   }
 }
 
+/* ═══════════ v2: OAuthAuth ═══════════
+   A GitHub App plus a stateless ~30-line worker that holds the client secret
+   (GitHub's token endpoint sends no CORS headers, so the exchange cannot
+   happen from a static page). Same four methods as PatAuth. */
+
+export const OAUTH = {
+  clientId: '',                 // public identifier of the commitd GitHub App
+  appSlug: 'commitd',
+  tokenService: '',             // https://commitd-token-service.<acct>.workers.dev
+};
+export const oauthEnabled = () => !!(OAUTH.clientId && OAUTH.tokenService);
+
+const SO = 'commitd.oauth.session.v1';
+const LO = 'commitd.oauth.vault.v1';
+const NONCE = 'commitd.oauth.nonce.v1';
+const bundleFrom = (o) => ({ t: o.access_token, r: o.refresh_token || null,
+  exp: o.expires_in ? Date.now() + o.expires_in * 1000 : null });
+
+export class OAuthAuth {
+  constructor() { this.bundle = null; this.who = null; this.pass = null; }
+
+  state() {
+    if (this.bundle) return 'ready';
+    if (sessionStorage.getItem(SO)) return 'session';
+    if (localStorage.getItem(LO)) return 'locked';
+    return 'empty';
+  }
+  meta() { try { return JSON.parse(localStorage.getItem(LO))?.meta || null; } catch { return null; } }
+
+  async restore() {
+    const s = sessionStorage.getItem(SO);
+    if (!s) return false;
+    const o = JSON.parse(s); this.bundle = o.bundle; this.who = o.who;
+    return true;
+  }
+  async unlock(passphrase) {
+    const rec = JSON.parse(localStorage.getItem(LO));
+    this.bundle = JSON.parse(await open(rec.blob, passphrase));
+    this.who = rec.meta; this.pass = passphrase;
+    this._session();
+    return true;
+  }
+  async persist(bundle, who, { remember, passphrase } = {}) {
+    this.bundle = bundle; this.who = who; this.pass = passphrase || null;
+    this._session();
+    if (remember && passphrase)
+      localStorage.setItem(LO, JSON.stringify({ blob: await seal(JSON.stringify(bundle), passphrase), meta: who }));
+  }
+  _session() { sessionStorage.setItem(SO, JSON.stringify({ bundle: this.bundle, who: this.who })); }
+  getToken() { return this.bundle?.t || null; }
+  identity() { return this.who; }
+  signOut({ forget = false } = {}) {
+    this.bundle = null; this.who = null; this.pass = null;
+    sessionStorage.removeItem(SO);
+    if (forget) localStorage.removeItem(LO);
+    localStorage.removeItem('commitd.etag.v1');
+  }
+
+  /* App user tokens can expire (8 h by default); refresh before they die. */
+  stale() { return !!(this.bundle?.exp && this.bundle.r && Date.now() > this.bundle.exp - 10 * 60e3); }
+  async refresh() {
+    const res = await fetch(`${OAUTH.tokenService}/refresh`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: this.bundle.r }) });
+    const o = await res.json();
+    if (!o.access_token) throw new Error(o.error_description || o.error || 'token refresh failed');
+    this.bundle = bundleFrom(o);
+    this._session();
+    if (this.pass && localStorage.getItem(LO))
+      localStorage.setItem(LO, JSON.stringify({ blob: await seal(JSON.stringify(this.bundle), this.pass), meta: this.who }));
+  }
+
+  static begin(repo) {
+    const nonce = crypto.randomUUID();
+    sessionStorage.setItem(NONCE, JSON.stringify({ nonce, repo }));
+    location.href = `https://github.com/login/oauth/authorize?client_id=${OAUTH.clientId}&state=${nonce}`;
+  }
+  /* The redirect back arrives with ?code=&state= in the query — hash routing
+     leaves the query alone. The code is single-use: scrub it immediately. */
+  static landing() {
+    const q = new URLSearchParams(location.search);
+    const code = q.get('code'), state = q.get('state');
+    if (!code) return null;
+    const saved = JSON.parse(sessionStorage.getItem(NONCE) || 'null');
+    history.replaceState(null, '', location.pathname + location.hash);
+    sessionStorage.removeItem(NONCE);
+    if (!saved || saved.nonce !== state) return null;
+    return { code, repo: saved.repo };
+  }
+  async complete(code) {
+    const res = await fetch(`${OAUTH.tokenService}/exchange`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }) });
+    const o = await res.json();
+    if (!o.access_token) throw new Error(o.error_description || o.error || 'token exchange failed');
+    this.bundle = bundleFrom(o);
+    this._session();
+    return this.bundle;
+  }
+}
+
 /* The pre-filled token page. GitHub reads these query parameters, so the
    scopes arrive already ticked and the user's job is Generate → copy. */
 export function tokenUrl(repo) {

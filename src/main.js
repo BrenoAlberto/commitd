@@ -4,7 +4,7 @@
 import { $, $$, esc, key, parse, addD, fmtDate, rel } from './util.js';
 import { S, store, setTheme } from './store.js';
 import { GitHub } from './github.js';
-import { PatAuth } from './auth.js';
+import { PatAuth, OAuthAuth, oauthEnabled } from './auth.js';
 import * as V from './vault.js';
 import * as M from './model.js';
 import * as A from './actions.js';
@@ -339,8 +339,23 @@ async function boot() {
   });
   store.on(() => render());
 
+  /* Coming back from GitHub's OAuth redirect? Finish the exchange first. */
+  const landing = oauthEnabled() && OAuthAuth.landing();
+  if (landing) {
+    return onb.completeOAuth(landing,
+      ({ gh, vault, auth }) => { S.gh = gh; S.vault = vault; S.auth = auth; S.readonly = false; go('#/today'); },
+      (msg) => { S.route = { name: 'error' }; S.error = msg; render(); });
+  }
+
   const r = parseHash();
   if (r.name === 'public') return route();
+
+  const oauth = new OAuthAuth();
+  if (oauth.state() === 'session' && await oauth.restore()) {
+    if (oauth.stale()) { try { await oauth.refresh(); } catch { /* expired: fall through to sign-in */ } }
+    if (oauth.getToken()) { S.auth = oauth; return openVault(oauth); }
+  }
+  if (oauth.state() === 'locked') { S.auth = oauth; return unlockScreen(oauth); }
 
   const auth = new PatAuth(); S.auth = auth;
   const st = auth.state();

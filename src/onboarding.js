@@ -4,7 +4,7 @@
 import { $, $$, esc } from './util.js';
 import { S, store } from './store.js';
 import { GitHub, PublicReader, GitHubError } from './github.js';
-import { PatAuth, tokenUrl } from './auth.js';
+import { PatAuth, OAuthAuth, OAUTH, oauthEnabled, tokenUrl } from './auth.js';
 import * as V from './vault.js';
 import { toast, errToast, busy } from './ui.js';
 import { sechead } from './views.js';
@@ -71,7 +71,14 @@ export function connectView() {
           that already exist.</p>
         <input class="inp" id="oRepo" value="${esc(repo)}" style="max-width:320px" spellcheck="false">
         <div style="margin-top:10px"><a class="btn btn-g" id="oNewRepo" href="https://github.com/new?name=${esc(repo)}" target="_blank" rel="noopener">Create it on GitHub ↗</a></div></div></div>
-      <div class="step"><span class="n">2</span><div>
+      ${oauthEnabled() ? `<div class="step"><span class="n">2</span><div>
+        <h4>Sign in with GitHub</h4>
+        <p>GitHub will ask you to install the commitd app on that one repository — pick it, authorize,
+          and you land back here signed in. No token to copy, nothing to configure.</p>
+        <div style="margin-top:12px"><button class="btn btn-p" id="oOAuth">Sign in with GitHub</button></div>
+        <p class="hint">Prefer to hold the credential yourself? The fine-grained-token way below works too.</p>
+      </div></div>` : ''}
+      <div class="step"><span class="n">${oauthEnabled() ? '3' : '2'}</span><div>
         <h4>Create a fine-grained token</h4>
         <p>Opens GitHub with the form pre-filled. Set <b>Repository access → Only select repositories</b>, pick
           your vault, then grant exactly:</p>
@@ -82,7 +89,7 @@ export function connectView() {
         <p class="hint">A token with only <b>Contents</b> works fine; you'd just change visibility on github.com instead.</p>
         <div style="margin-top:12px"><a class="btn btn-g" href="${tokenUrl(repo)}" target="_blank" rel="noopener">Open GitHub token page ↗</a></div>
       </div></div>
-      <div class="step"><span class="n">3</span><div>
+      <div class="step"><span class="n">${oauthEnabled() ? '4' : '3'}</span><div>
         <h4>Paste it back</h4>
         <input class="inp" id="oTok" type="password" placeholder="github_pat_…" spellcheck="false" autocomplete="off">
         <label class="row" style="margin-top:12px;font-size:13px;cursor:pointer">
@@ -101,6 +108,8 @@ export function wireConnect(onReady) {
   $('#oRemember').onchange = (e) => { $('#oPassWrap').style.display = e.target.checked ? '' : 'none'; };
   $('#oRepo').oninput = (e) => { S.pendingRepo = e.target.value.trim();
     $('#oNewRepo')?.setAttribute('href', `https://github.com/new?name=${encodeURIComponent(S.pendingRepo || DEFAULT_REPO)}`); };
+  const oa = $('#oOAuth');
+  if (oa) oa.onclick = () => OAuthAuth.begin($('#oRepo').value.trim() || DEFAULT_REPO);
   $('#oGo').onclick = async () => {
     const token = $('#oTok').value.trim(), repo = ($('#oRepo').value.trim() || DEFAULT_REPO);
     const remember = $('#oRemember').checked, passphrase = $('#oPass')?.value || '';
@@ -155,6 +164,39 @@ export function wireConnect(onReady) {
         : e.message || String(e));
     }
   };
+}
+
+/* ═══════════ oauth completion ═══════════
+   The redirect back from GitHub lands here with a single-use code. An App
+   user token cannot create user repos, so a missing vault gets instructions
+   rather than an attempt. */
+export async function completeOAuth(landing, onReady, onError) {
+  busy('finishing sign-in');
+  try {
+    const auth = new OAuthAuth();
+    await auth.complete(landing.code);
+    const probe = new GitHub({ token: auth.getToken() });
+    const user = await probe.user();
+    const repo = landing.repo || DEFAULT_REPO;
+    const gh = new GitHub({ token: auth.getToken(), owner: user.login, repo });
+    let info = null;
+    try { info = await gh.repoInfo(); }
+    catch (e) { if (e.status !== 404) throw e; }
+    if (!info) throw new Error(`GitHub can't see ${user.login}/${repo}. Create it at github.com/new?name=${repo} `
+      + `(private, tick "Add a README"), make sure the commitd app is installed on it `
+      + `(github.com/apps/${OAUTH.appSlug}), then sign in again.`);
+    gh.branch = info.default_branch || 'main';
+    let vault = await V.loadVault(gh, { onProgress: busy });
+    if (!vault) {
+      busy('bootstrapping');
+      await gh.commitFiles(V.bootstrapFiles(user.login), 'commitd: initialise vault');
+      vault = await V.loadVault(gh, { onProgress: busy });
+    }
+    vault.repo = { name: repo, private: info.private, url: info.html_url, owner: user.login };
+    await auth.persist(auth.bundle, { login: user.login, avatar: user.avatar_url, repo }, {});
+    busy(null);
+    onReady({ gh, vault, auth });
+  } catch (e) { busy(null); onError(e.message || String(e)); }
 }
 
 /* ═══════════ account & vault settings ═══════════ */
