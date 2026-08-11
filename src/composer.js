@@ -1,0 +1,207 @@
+/* Commit composer and the branch / topic wizard.
+
+   The composer is deliberately two steps. Step one is WHICH BRANCH — a
+   search box with today's due branches ranked first. The message field is
+   never focused before a branch is chosen: being dropped into a text box for
+   an unknown branch is disorienting, and it gets worse the more branches you
+   have. On touch neither step steals focus, because summoning a keyboard over
+   the list you are trying to read is not help. */
+
+import { $, $$, esc, slug, key } from './util.js';
+import { S, store } from './store.js';
+import { CADENCES, METRIC_TYPES, targetAt, dueToday, isAbstain } from './model.js';
+import { shade, slotOf } from './theme.js';
+import { openSheet, closeAll, fitSheet, toast } from './ui.js';
+import * as A from './actions.js';
+
+let target = null, psel = 0;
+const focusable = () => matchMedia('(pointer:fine)').matches;
+
+const pickList = () => {
+  const due = dueToday(S.vault);
+  const rank = (b) => (due.includes(b) ? 0 : b.checkedOut ? 1 : 2);
+  return S.vault.branches.filter(b => !b.mergedAt)
+    .flatMap(b => b.topics.filter(t => !t.closed).map(t => ({ t, b, r: rank(b) })))
+    .sort((x, y) => x.r - y.r || x.t.full.localeCompare(y.t.full));
+};
+
+export function openComposer(full, date) {
+  const dk = date || S.vault.today;
+  if (full) {
+    const t = S.vault.branches.flatMap(b => b.topics).find(x => x.full === full);
+    if (t) { target = t; return composerForm(t, dk); }
+  }
+  psel = 0; composerPick(dk, '');
+}
+
+function composerPick(dk, q) {
+  const all = pickList(), qq = q.toLowerCase();
+  const list = all.filter(x => !qq || x.t.full.includes(qq)
+    || x.b.title.toLowerCase().includes(qq) || x.b.group.includes(qq));
+  psel = Math.max(0, Math.min(psel, list.length - 1));
+  let out = '', lastR = -1;
+  list.forEach((x, i) => {
+    if (x.r !== lastR && !qq) { lastR = x.r; out += `<div class="psec">${['Due today', 'Checked out', 'Parked'][x.r]}</div>`; }
+    out += `<button class="pitem${i === psel ? ' sel' : ''}" data-pick="${esc(x.t.full)}" style="--bc:${x.b.color}">
+      <span class="sw"></span><span>${esc(x.b.emoji)}</span><span class="nm">${esc(x.t.full)}</span>
+      <span class="d">${esc((x.t.metrics || []).map(m => m.k).join(' · ') || 'message only')}</span></button>`;
+  });
+  $('#composer').style.removeProperty('--bc');
+  openSheet('#composer', {
+    head: `<span class="pr">$</span><span class="mono" style="font-size:14px">git commit</span>
+      <input id="pInput" placeholder="which branch?" autocomplete="off" spellcheck="false" value="${esc(q)}">
+      <button class="iconbtn" data-close>✕</button>`,
+    body: list.length ? `<div class="plist" style="padding:11px">${out}</div>`
+      : `<div class="muted" style="padding:26px 16px;font-size:13px">No branch matches.
+         <b>Enter</b> creates one called <span class="mono">${esc(q)}</span>.</div>`,
+    foot: `<span class="muted mono" style="font-size:11px"><kbd>↑↓</kbd> pick &nbsp; <kbd>↵</kbd> select</span>
+      <a class="peek" id="pNew" style="margin-left:auto;cursor:pointer">＋ new branch</a>`,
+  });
+  $('[data-close]').onclick = closeAll;
+  $('#pNew').onclick = () => { closeAll(); openWizard(); };
+  $$('#composer [data-pick]').forEach(el => el.onclick = () => {
+    target = S.vault.branches.flatMap(b => b.topics).find(t => t.full === el.dataset.pick);
+    composerForm(target, dk);
+  });
+  const inp = $('#pInput');
+  inp.oninput = () => { psel = 0; composerPick(dk, inp.value); };
+  inp.onkeydown = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); psel = Math.min(psel + 1, list.length - 1); composerPick(dk, inp.value); }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); psel = Math.max(psel - 1, 0); composerPick(dk, inp.value); }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (!list.length) { closeAll(); openWizard(inp.value); return; }
+      target = list[psel].t; composerForm(target, dk);
+    }
+  };
+  if (focusable()) setTimeout(() => { inp.focus(); inp.setSelectionRange(q.length, q.length); }, 60);
+}
+
+function composerForm(t, dk) {
+  const b = t.parent;
+  $('#composer').style.setProperty('--bc', b.color);
+  openSheet('#composer', {
+    head: `<span class="pr">$</span><span class="mono" style="font-size:14px">git commit</span>
+      <button class="chip mono" id="cSwap" style="height:26px;cursor:pointer">
+        <span class="sw" style="background:${b.color};box-shadow:none"></span>${esc(t.full)} <span class="muted">change</span></button>
+      ${dk !== S.vault.today ? `<span class="chip mono" style="height:26px;font-size:11px">--date ${dk}</span>` : ''}
+      <button class="iconbtn" data-close style="margin-left:auto">✕</button>`,
+    body: `<div style="padding:18px">
+      <div class="field"><label>Message</label>
+        <textarea class="inp" id="cMsg" placeholder="what actually happened — one honest line"></textarea></div>
+      ${(t.metrics || []).length ? `<div class="field"><label>Metrics · defined on ${esc(t.implicit ? 'this branch' : t.full)}</label>
+        <div class="mgrid">${t.metrics.map(m => `<input class="inp" id="m_${esc(m.k)}" type="number" step="any"
+          placeholder="${esc(m.label)}${m.unit ? ` (${esc(m.unit)})` : ''} · target ${targetAt(m, dk)}">`).join('')}</div></div>` : ''}
+      <div class="field" style="margin-bottom:0"><label>Tags</label>
+        <input class="inp" id="cTags" placeholder="comma, separated, optional"></div></div>`,
+    foot: `<span class="muted mono" style="font-size:11px;margin-right:auto">→ branches/${esc(t.implicit ? b.id : `${b.id}/topics/${t.id}`)}/log/${dk.slice(0, 7)}.jsonl</span>
+      <button class="btn btn-g" data-close>cancel</button><button class="btn btn-p" id="cDo">commit</button>`,
+  });
+  $$('[data-close]').forEach(el => el.onclick = closeAll);
+  $('#cSwap').onclick = () => { psel = 0; composerPick(dk, ''); };
+  $('#cDo').onclick = async () => {
+    const metrics = {};
+    (t.metrics || []).forEach(m => { const v = $('#m_' + m.k)?.value; if (v !== '' && v != null) metrics[m.k] = +v; });
+    const payload = { message: $('#cMsg').value.trim(), metrics,
+      tags: $('#cTags').value.split(',').map(x => x.trim()).filter(Boolean), date: dk };
+    closeAll();
+    await A.commit(b, t, payload);
+  };
+  if (focusable()) setTimeout(() => $('#cMsg')?.focus(), 80);
+}
+
+/* ── wizard ──────────────────────────────────────────────── */
+let wiz = null;
+const newMetric = () => ({ label: '', unit: '', type: 'count', dir: 'at_least', target: '' });
+
+export function openWizard(prefill = '', topicOf = null) {
+  wiz = { topicOf, title: prefill, emoji: '🌱', group: S.vault.groups[0].id, goal: '',
+    cadence: { type: 'daily', n: 3 }, metrics: [newMetric()], why: '' };
+  drawWizard();
+}
+function drawWizard() {
+  const t = wiz.topicOf, parent = t && S.vault.branches.find(b => b.id === t);
+  const id = slug(wiz.title) || 'unnamed';
+  const mets = wiz.metrics.filter(m => m.label.trim());
+  $('#composer').style.setProperty('--bc', parent ? parent.color : shade(slotOf(S.vault.groups, wiz.group), .6));
+  openSheet('#composer', {
+    head: `<span class="pr">$</span><span class="mono" style="font-size:14px" id="wTitle">${
+      t ? `git checkout -b ${esc(t)}/${esc(id)}` : `git branch ${esc(id)}`}</span>
+      <button class="iconbtn" data-close style="margin-left:auto">✕</button>`,
+    body: `<div style="padding:18px">
+      <div class="wsec">
+        <div class="mgrid3" style="grid-template-columns:64px 1fr">
+          <input class="inp" id="w_emoji" value="${esc(wiz.emoji)}" style="text-align:center;font-size:19px">
+          <input class="inp" id="w_title" value="${esc(wiz.title)}"
+            placeholder="${t ? 'What is this focus? e.g. N4 grammar' : 'What are you practising? e.g. Practice guitar'}"></div>
+        <div class="hint">→ <span class="mono">${esc(t ? `${t}/${id}` : id)}</span> · stored at
+          <span class="mono">branches/${esc(t ? `${t}/topics/${id}` : id)}/</span></div></div>
+      ${t ? `<div class="wsec"><label class="lbl" style="display:block;margin-bottom:8px">Goal — one sentence</label>
+        <input class="inp" id="w_goal" value="${esc(wiz.goal)}" placeholder="All 92 kana, recognised in under 2 seconds.">
+        <div class="hint">Cadence is inherited from <span class="mono">${esc(t)}</span>. A topic branch never has its
+        own streak — that is the whole point.</div></div>`
+      : `<div class="wsec"><label class="lbl" style="display:block;margin-bottom:8px">Group</label>
+        <div class="chipsel">${S.vault.groups.map(g => `<button class="${wiz.group === g.id ? 'on' : ''}" data-wg="${g.id}">
+          <span style="color:${shade(g.slot, .6)}">●</span> ${esc(g.label)}</button>`).join('')}</div>
+        <div class="hint">Groups own the colour, so branch colours stay colourblind-safe past eight branches.</div></div>
+      <div class="wsec"><label class="lbl" style="display:block;margin-bottom:8px">Cadence</label>
+        <div class="chipsel">${CADENCES.map(([k, l]) => `<button class="${wiz.cadence.type === k ? 'on' : ''}" data-wc="${k}">${l}</button>`).join('')}</div>
+        ${/n_per/.test(wiz.cadence.type) ? `<div class="row" style="margin-top:10px">
+          <input class="inp" id="w_n" type="number" min="1" value="${wiz.cadence.n}" style="width:80px">
+          <span class="hint" style="margin:0">times per ${wiz.cadence.type === 'n_per_week' ? 'week' : 'month'} — rest days don't break the streak</span></div>` : ''}
+        ${wiz.cadence.type === 'abstain' ? `<div class="hint">Inverted: every day that passes commits itself, and a commit is a relapse.</div>` : ''}
+      </div>`}
+      <div class="wsec"><label class="lbl" style="display:block;margin-bottom:10px">Metrics</label>
+        ${wiz.metrics.map((m, i) => `<div class="mrow">
+          <input class="inp" data-mi="${i}" data-mf="label" value="${esc(m.label)}" placeholder="Label e.g. Kana">
+          <select class="inp" data-mi="${i}" data-mf="type">${METRIC_TYPES.map(([k, l]) => `<option value="${k}"${m.type === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
+          <input class="inp" data-mi="${i}" data-mf="unit" value="${esc(m.unit)}" placeholder="unit">
+          <select class="inp" data-mi="${i}" data-mf="dir">
+            <option value="at_least"${m.dir === 'at_least' ? ' selected' : ''}>≥</option>
+            <option value="at_most"${m.dir === 'at_most' ? ' selected' : ''}>≤</option></select>
+          <input class="inp" data-mi="${i}" data-mf="target" value="${esc(m.target)}" placeholder="target" type="number" step="any">
+          <button class="mdel" data-mdel="${i}">✕</button></div>`).join('')}
+        <button class="madd" id="wAdd">＋ add a metric</button>
+        <div class="hint">Leave this empty for a message-only branch. Targets can be raised later without rewriting
+          history — they are stored as a dated list.</div></div>
+      ${t ? '' : `<div class="wsec"><label class="lbl" style="display:block;margin-bottom:8px">README — your why</label>
+        <textarea class="inp" id="w_why" placeholder="The sentence you'll need to read at 11pm when you don't want to.">${esc(wiz.why)}</textarea></div>`}
+      <div class="wsec"><div class="preview"><div class="pl">Preview · what committing will look like</div>
+        <div class="field" style="margin-bottom:10px"><label>Message</label>
+          <div class="inp muted" style="font-size:13px">what actually happened — one honest line</div></div>
+        ${mets.length ? `<div class="mgrid">${mets.map(m => `<div class="inp muted" style="font-size:12.5px">${esc(m.label)}${
+          m.unit ? ` (${esc(m.unit)})` : ''}${m.target !== '' ? ` · target ${m.dir === 'at_most' ? '≤' : '≥'} ${esc(m.target)}` : ''}</div>`).join('')}</div>`
+          : '<div class="hint" style="margin:0">No metrics — the grid will show <b>did you show up</b>.</div>'}
+      </div></div></div>`,
+    foot: `<button class="btn btn-g" data-close>cancel</button>
+      <button class="btn btn-p" id="wDo">${t ? 'checkout -b' : 'create branch'}</button>`,
+  });
+  $$('[data-close]').forEach(el => el.onclick = closeAll);
+  const bind = (sel, fn) => { const e = $(sel); if (e) e.oninput = () => fn(e.value); };
+  bind('#w_title', v => { wiz.title = v; $('#wTitle').textContent = (wiz.topicOf ? `git checkout -b ${wiz.topicOf}/` : 'git branch ') + (slug(v) || 'unnamed'); });
+  bind('#w_emoji', v => wiz.emoji = v); bind('#w_goal', v => wiz.goal = v); bind('#w_why', v => wiz.why = v);
+  bind('#w_n', v => wiz.cadence.n = Math.max(1, +v || 1));
+  $$('#composer [data-wg]').forEach(el => el.onclick = () => { wiz.group = el.dataset.wg; drawWizard(); });
+  $$('#composer [data-wc]').forEach(el => el.onclick = () => { wiz.cadence = { type: el.dataset.wc, n: wiz.cadence.n || 3 }; drawWizard(); });
+  $$('#composer [data-mi]').forEach((el) => {
+    el.oninput  = () => { wiz.metrics[+el.dataset.mi][el.dataset.mf] = el.value; };
+    el.onchange = () => { wiz.metrics[+el.dataset.mi][el.dataset.mf] = el.value; drawWizard(); };
+  });
+  $$('#composer [data-mdel]').forEach(el => el.onclick = () => { wiz.metrics.splice(+el.dataset.mdel, 1); drawWizard(); });
+  $('#wAdd').onclick = () => { wiz.metrics.push(newMetric()); drawWizard(); };
+  $('#wDo').onclick = async () => {
+    const metrics = wiz.metrics.filter(m => m.label.trim()).map(m => ({
+      k: slug(m.label), label: m.label.trim(), unit: m.unit.trim(), type: m.type, dir: m.dir,
+      targets: [{ from: S.vault.today, v: +m.target || 0 }] }));
+    const w = wiz; closeAll();
+    if (w.topicOf) {
+      const b = S.vault.branches.find(x => x.id === w.topicOf);
+      const t = await A.createTopic(b, { title: w.title, goal: w.goal, metrics });
+      if (t) location.hash = `#/b/${b.id}/${t.id}`;
+    } else {
+      const b = await A.createBranch({ title: w.title, emoji: w.emoji, group: w.group,
+        cadence: w.cadence, metrics, why: w.why });
+      if (b) location.hash = `#/b/${b.id}`;
+    }
+  };
+}

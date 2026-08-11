@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+<title>commitd — a daemon for the habits you keep</title>
+<meta name="description" content="A habit tracker that treats your life like a git repository. No backend; your data lives in a GitHub repo you own.">
+<meta name="color-scheme" content="dark light">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%2314120f'/><rect x='4' y='4' width='8' height='8' rx='2' fill='%234ecf9e'/></svg>">
+</head>
+<body>
+<div id="tip"></div>
+<div id="banner"></div>
+<div class="app">
+  <header class="topbar">
+    <a class="logo" href="#/" style="text-decoration:none"><span class="dot"></span>commitd</a>
+    <div class="chip" id="vaultChip" style="display:none"></div>
+    <nav class="secnav" id="secnav"></nav>
+    <div class="spacer"></div>
+    <button class="kbtn" id="openPalette" style="display:none">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M10.68 11.74a6 6 0 01-7.922-8.982 6 6 0 018.982 7.922l3.04 3.04a.749.749 0 01-1.06 1.06zM11.5 7a4.5 4.5 0 10-9 0 4.5 4.5 0 009 0"/></svg>
+      <span>Run a command</span><kbd>⌘K</kbd></button>
+    <button class="iconbtn" id="themeBtn" title="Toggle theme (t)">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" id="themeIcon"></svg></button>
+    <button class="avatar" id="avatar" title="Vault settings" style="display:none">?</button>
+  </header>
+  <div class="layout">
+    <aside class="side" style="display:none">
+      <div><h4 class="lbl">Head</h4><div class="chip" style="width:100%;justify-content:flex-start" id="headChip"></div></div>
+      <div><h4 class="lbl">Branches</h4>
+        <div class="sfilter"><svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M10.68 11.74a6 6 0 01-7.922-8.982 6 6 0 018.982 7.922l3.04 3.04a.749.749 0 01-1.06 1.06zM11.5 7a4.5 4.5 0 10-9 0 4.5 4.5 0 009 0"/></svg>
+          <input id="sFilter" placeholder="filter branches" autocomplete="off"></div>
+        <div class="brlist" id="brlist"></div>
+        <div class="foot" id="sparseFoot" style="margin-top:10px"></div>
+        <button class="addbr" id="newBranch">＋ new branch</button></div>
+      <div id="mergedWrap"><h4 class="lbl">Merged into main</h4><div class="brlist" id="mergedlist"></div></div>
+    </aside>
+    <main id="main"></main>
+  </div>
+</div>
+<div class="scrim" id="scrim"></div>
+<div class="modal" id="palette"></div>
+<div class="modal" id="composer"></div>
+<div class="drawer" id="drawer"></div>
+<div class="toast" id="toast"></div>
+<button class="fab" id="fab" style="display:none">＋ commit <kbd>c</kbd></button>
+<nav class="tabbar" id="tabbar"></nav>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
