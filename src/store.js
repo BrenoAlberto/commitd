@@ -5,6 +5,7 @@ export const store = {
     section: 'today',               // today | vault | insights | log
     view: null, topic: null, tab: null,
     theme: localStorage.getItem('commitd.theme') || 'dark',
+    gridMode: localStorage.getItem('commitd.gridmode') || 'heat',
     filter: '', logFilter: '', logN: 40, bview: 'list',
     closed: new Set(), busy: null, error: null,
     vault: null, gh: null, auth: null, readonly: false, rate: null,

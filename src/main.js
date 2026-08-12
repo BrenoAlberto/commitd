@@ -187,6 +187,9 @@ function wire() {
   $$('[data-act]').forEach(el => el.onclick = () => act(el.dataset.act));
   $$('[data-pickrepo]').forEach(el => el.onclick = () =>
     onb.finishWithRepo(S.auth, S.pickRepos[+el.dataset.pickrepo], onReadyVault, onErrorVault));
+  $$('[data-gridmode]').forEach(el => el.onclick = () => {
+    S.gridMode = el.dataset.gridmode; localStorage.setItem('commitd.gridmode', S.gridMode); render();
+  });
   if (S.route.name === 'connect') onb.wireConnect();
   if (S.route.name === 'pubprompt') $('#pubGo').onclick = () =>
     go(`#/u/${$('#pubOwner').value.trim()}/${$('#pubRepo').value.trim() || onb.DEFAULT_REPO}`);

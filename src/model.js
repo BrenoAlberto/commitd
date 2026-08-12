@@ -186,11 +186,15 @@ export function unifiedDays(vault, from, days) {
   for (let i = 0; i < days; i++) {
     const dk = key(addD(from, i));
     let n = 0, r = false;
+    const bySlot = {};
     vault.branches.forEach((b) => {
       if (!b.checkedOut && !b.mergedAt) return;
-      dayList(b, dk).forEach(c => (c.relapse ? (r = true) : n++));
+      dayList(b, dk).forEach(c => { if (c.relapse) r = true; else { n++; bySlot[b.slot] = (bySlot[b.slot] || 0) + 1; } });
     });
-    m[dk] = { n, r };
+    /* the slot that owns the day — most commits wins, ties go to the lower slot */
+    let s = null;
+    Object.keys(bySlot).forEach(k => { if (s === null || bySlot[k] > bySlot[s] || (bySlot[k] === bySlot[s] && +k < +s)) s = k; });
+    m[dk] = { n, r, ...(s !== null ? { s: +s } : {}) };
     if (n) counts.push(n);
   }
   counts.sort((a, b) => a - b);

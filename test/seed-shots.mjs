@@ -47,9 +47,10 @@ for (const [w,hh,tag,mobile] of [[1400,1200,'desktop',false],[412,915,'mobile',t
   const page = await ctx.newPage();
   await page.route('https://api.github.com/**', (r,q) => h(r,q));
   await page.goto('http://localhost:8137/');
-  await page.waitForTimeout(400);
-  await page.click('[data-act="connect"]'); await page.waitForTimeout(300);
-  await page.fill('#oTok','t'); await page.click('#oGo'); await page.waitForTimeout(1800);
+  await page.evaluate(() => sessionStorage.setItem('commitd.oauth.session.v1', JSON.stringify({
+    bundle: { t: 'github_pat_TESTTOKEN', r: null, exp: null },
+    who: { login: 'testuser', avatar: '', repo: 'commitd-vault', repoOwner: 'testuser' } })));
+  await page.reload(); await page.waitForTimeout(1800);
   await page.screenshot({ path:`test/app-${tag}-today.png`, fullPage:!mobile });
   await page.evaluate(() => location.hash = '#/vault'); await page.waitForTimeout(1400);
   await page.screenshot({ path:`test/app-${tag}-vault.png`, fullPage:!mobile });

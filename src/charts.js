@@ -1,6 +1,8 @@
 /* Every mark in here follows the same three rules:
-   · the heatmap encodes magnitude, so it is a sequential single-hue ramp —
-     never one hue per branch fighting inside one cell;
+   · the heatmap encodes magnitude, so by default it is a sequential
+     single-hue ramp. The opt-in "by branch" lens tints each day with the
+     group hue of whichever branch dominated it — hues stay within the
+     curated group palette and intensity still carries the magnitude;
    · identity is carried by a swatch plus a label, never by colour alone;
    · "before this existed" is drawn differently from "you missed it". */
 
@@ -18,6 +20,7 @@ export function yearGrid(vault, { branch = null, topic = null, lanes = false } =
   const { start, today } = gridRange(vault.today);
   const slot = topic ? topic.slot : branch ? branch.slot : 2;
   const uni = (!branch && !topic) ? unifiedDays(vault, start, 371) : null;
+  const byBranch = uni && S.gridMode === 'branches';
   let months = '', lastM = -1, cells = '';
   for (let i = 0; i < 371; i++) {
     const d = addD(start, i), dk = key(d), wk = Math.floor(i / 7);
@@ -25,7 +28,7 @@ export function yearGrid(vault, { branch = null, topic = null, lanes = false } =
       months += `<span style="left:${wk * 16}px">${MONTHS[d.getMonth()]}</span>`; lastM = d.getMonth();
     }
     if (d > today) { cells += '<div class="c oor"></div>'; continue; }
-    let lvl = 0, rl = false, mark = '';
+    let lvl = 0, rl = false, mark = '', cellSlot = slot;
     if (topic) {
       if (dk < topic.opened || (topic.closed && dk > topic.closed)) { cells += '<div class="c oor"></div>'; continue; }
       const c = topic.byDay[dk]; rl = !!(c && c.relapse); lvl = rl ? 0 : topic.lvl(c);
@@ -33,14 +36,22 @@ export function yearGrid(vault, { branch = null, topic = null, lanes = false } =
       if (!inLife(branch, dk)) { cells += '<div class="c oor"></div>'; continue; }
       const v = branchLevel(branch, dk); rl = v === -1; lvl = rl ? 0 : v;
     } else {
-      const { n, r } = uni.m[dk];
+      const { n, r, s } = uni.m[dk];
       lvl = n ? Math.max(1, Math.min(4, Math.ceil(n / uni.p90 * 4))) : 0;
       rl = r && n === 0; if (r && n > 0) mark = ' rl-mark';
+      if (byBranch && s != null) cellSlot = s;
     }
     cells += `<div class="c${rl ? ' relapse' : ''}${mark}${dk === vault.today ? ' today' : ''}" data-dk="${dk}"
-      style="background:${rl ? '' : step(slot, lvl, S.theme)};animation-delay:${(i % 7) * 13 + Math.floor(i / 7) * 6}ms"></div>`;
+      style="background:${rl ? '' : step(cellSlot, lvl, S.theme)};animation-delay:${(i % 7) * 13 + Math.floor(i / 7) * 6}ms"></div>`;
   }
-  const legend = [0, 1, 2, 3, 4].map(l => `<div class="c" style="background:${step(slot, l, S.theme)}"></div>`).join('');
+  const usedGroups = uni ? vault.groups.filter(g =>
+    vault.branches.some(b => (b.checkedOut || b.mergedAt) && b.group === g.id)) : [];
+  const legend = byBranch
+    ? usedGroups.map(g => `<span class="lgg"><i style="background:${step(g.slot, 3, S.theme)}"></i>${esc(g.label)}</span>`).join('')
+    : `<span>less</span>${[0, 1, 2, 3, 4].map(l => `<div class="c" style="background:${step(slot, l, S.theme)}"></div>`).join('')}<span>more</span>`;
+  const modeCtl = uni ? `<span class="gmode">
+      <button class="${S.gridMode === 'heat' ? 'on' : ''}" data-gridmode="heat">heat</button>
+      <button class="${S.gridMode === 'branches' ? 'on' : ''}" data-gridmode="branches">by branch</button></span>` : '';
   let laneHTML = '', laneLbs = '';
   if (lanes && branch) {
     branch.topics.filter(t => !t.implicit).forEach((t) => {
@@ -62,7 +73,7 @@ export function yearGrid(vault, { branch = null, topic = null, lanes = false } =
       <div class="gmonths">${months}</div><div class="g anim">${cells}</div>
       ${laneHTML ? `<div class="lanes">${laneHTML}</div>` : ''}
     </div></div></div>
-  <div class="legend"><span>less</span>${legend}<span>more</span></div>`;
+  <div class="legend">${legend}${modeCtl}</div>`;
 }
 
 export function miniGrid(vault, node, isTopic) {
