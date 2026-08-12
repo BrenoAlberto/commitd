@@ -137,6 +137,13 @@ export async function finishWithRepo(auth, repo, onReady, onError) {
     const gh = new GitHub({ token: auth.getToken(), owner, repo: repo.name, branch: repo.default_branch || 'main' });
     let vault = await V.loadVault(gh, { onProgress: busy });
     if (!vault) {
+      /* Never seed a vault into a public repository. A vault holds every
+         honest commit message ever written — going public is a decision to
+         make later, eyes open, not a side effect of picking the wrong repo
+         on the install screen. */
+      if (repo.private === false) {
+        busy(null); S.pubRepo = { name: repo.name, owner }; S.route = { name: 'pubwarn' }; store.emit(); return;
+      }
       busy('bootstrapping the vault');
       await gh.waitForRef();
       await gh.commitFiles(V.bootstrapFiles(who.login), 'commitd: initialise vault');
@@ -168,6 +175,29 @@ export function installView() {
         <p>Choose <b>Only select repositories</b> → the vault. GitHub sends you straight back here.</p>
         <div style="margin-top:12px"><a class="btn btn-p" href="${installUrl()}">Install commitd on the vault ↗</a></div>
         <p class="hint">Installed it in another tab and landed back here? <a data-act="recheck">Check again</a>.</p></div></div>
+    </div>
+    <div style="margin-top:26px"><button class="peek" data-act="signout">sign out instead</button></div>
+  </div>`;
+}
+
+/* The only repository commitd can see is public — refuse to seed it. */
+export function pubWarnView() {
+  const r = S.pubRepo || {};
+  return `<div class="center land">
+    <h1 style="font-size:clamp(30px,5vw,42px)">That repository is public</h1>
+    <p class="sub" style="font-size:15.5px">commitd is installed on
+      <span class="mono">${esc(r.owner || '')}/${esc(r.name || '')}</span>, which anyone on the internet can read.
+      A vault holds every habit and every honest commit message — it should start private.</p>
+    <div class="steps" style="margin-top:26px">
+      <div class="step"><span class="n">→</span><div>
+        <h4>Pick a private home for it</h4>
+        <p>Either make that repository private
+          (<a href="https://github.com/${esc(r.owner || '')}/${esc(r.name || '')}/settings" target="_blank" rel="noopener">repository settings ↗</a>),
+          or create a private <span class="mono">${DEFAULT_REPO}</span>
+          (<a href="https://github.com/new?name=${DEFAULT_REPO}" target="_blank" rel="noopener">github.com/new ↗</a>)
+          and point the installation at it
+          (<a href="${installUrl()}" target="_blank" rel="noopener">configure ↗</a>).</p>
+        <div style="margin-top:14px"><button class="btn btn-p" data-act="recheck">Check again</button></div></div></div>
     </div>
     <div style="margin-top:26px"><button class="peek" data-act="signout">sign out instead</button></div>
   </div>`;

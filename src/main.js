@@ -110,6 +110,7 @@ function render() {
       <div class="err">${esc(S.error)}</div><button class="btn btn-g" data-act="home">back</button></div>`;
   else if (r.name === 'install')       main.innerHTML = onb.installView();
   else if (r.name === 'pickrepo')      main.innerHTML = onb.pickRepoView();
+  else if (r.name === 'pubwarn')       main.innerHTML = onb.pubWarnView();
   else if (!v)                          main.innerHTML = onb.landingView();
   else if (r.name === 'branch') {
     const b = v.branches.find(x => x.id === r.branch);
