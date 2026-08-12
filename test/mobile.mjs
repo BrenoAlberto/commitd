@@ -32,9 +32,24 @@ await page.waitForTimeout(400);
 ok('compose from the tab bar opens the picker', await page.isVisible('#pInput'));
 ok('touch does not steal focus', await page.evaluate(() => document.activeElement.tagName.toLowerCase() !== 'input'));
 await page.screenshot({ path:'test/shot-picker.png' });
+/* typing must not rebuild the input — that closes the phone keyboard per key */
+await page.tap('#pInput');
+await page.type('#pInput', 'gym', { delay: 60 });
+ok('input keeps focus while typing (keyboard stays up)',
+   await page.evaluate(() => document.activeElement?.id === 'pInput'));
+ok('typed text survives the list redraws', (await page.inputValue('#pInput')) === 'gym');
 /* keyboard geometry, both viewport behaviours */
 
 await page.keyboard.press('Escape');
+/* a visible-or-hidden toast must never eat taps meant for the tab bar */
+await page.evaluate(() => { const t = document.querySelector('#toast'); t.textContent = 'x'; t.classList.add('on'); });
+const blocker = await page.evaluate(() => {
+  const el = document.querySelector('.tabbar .plus') || document.querySelector('.tabbar button');
+  const r = el.getBoundingClientRect();
+  return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)?.closest('.tabbar') ? 'tabbar' : 'blocked';
+});
+ok('tab bar stays tappable under a toast', blocker === 'tabbar', blocker);
+await page.evaluate(() => document.querySelector('#toast').classList.remove('on'));
 await page.evaluate(() => location.hash = '#/vault'); await page.waitForTimeout(600);
 ok('no horizontal overflow in the app', !(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth+1)));
 await page.screenshot({ path:'test/shot-vault.png' });

@@ -401,9 +401,11 @@ textarea.inp{resize:vertical;min-height:72px;font-family:var(--face)}
 .insight .n{font-size:11px;color:var(--ink3);font-family:var(--mono);margin-top:4px}
 .toast{position:fixed;bottom:26px;left:50%;transform:translate(-50%,20px);z-index:300;background:var(--raise);
   border:1px solid var(--rule);border-radius:10px;padding:11px 16px;font-size:13px;opacity:0;transition:.22s;
-  display:flex;gap:10px;align-items:center;box-shadow:0 10px 30px -10px rgba(0,0,0,.4);max-width:calc(100vw - 28px)}
+  display:flex;gap:10px;align-items:center;box-shadow:0 10px 30px -10px rgba(0,0,0,.4);max-width:calc(100vw - 28px);
+  pointer-events:none}   /* never a tap shield — an invisible toast was eating the tab bar */
 .toast{border-radius:2px}
 .toast.on{opacity:1;transform:translate(-50%,0)}
+@media(max-width:960px){.toast{bottom:112px}}  /* clear of the tab bar */
 .fab{position:fixed;right:22px;bottom:22px;z-index:60;height:50px;padding:0 20px;border-radius:99px;
   background:var(--pri);color:var(--pri-fg);font-weight:600;font-size:14.5px;display:flex;align-items:center;gap:9px;
   box-shadow:0 8px 30px -6px rgba(0,0,0,.45);transition:.15s}

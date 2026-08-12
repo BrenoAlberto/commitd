@@ -34,40 +34,48 @@ export function openComposer(full, date) {
   psel = 0; composerPick(dk, '');
 }
 
+/* The sheet renders once; keystrokes redraw only the list below the input.
+   Rebuilding the input on every character would blur it — on a phone that
+   closes the keyboard after each letter. */
 function composerPick(dk, q) {
-  const all = pickList(), qq = q.toLowerCase();
-  const list = all.filter(x => !qq || x.t.full.includes(qq)
-    || x.b.title.toLowerCase().includes(qq) || x.b.group.includes(qq));
-  psel = Math.max(0, Math.min(psel, list.length - 1));
-  let out = '', lastR = -1;
-  list.forEach((x, i) => {
-    if (x.r !== lastR && !qq) { lastR = x.r; out += `<div class="psec">${['Due today', 'Checked out', 'Parked'][x.r]}</div>`; }
-    out += `<button class="pitem${i === psel ? ' sel' : ''}" data-pick="${esc(x.t.full)}" style="--bc:${x.b.color}">
-      <span class="sw"></span><span>${esc(x.b.emoji)}</span><span class="nm">${esc(x.t.full)}</span>
-      <span class="d">${esc((x.t.metrics || []).map(m => m.k).join(' · ') || 'message only')}</span></button>`;
-  });
   $('#composer').style.removeProperty('--bc');
   openSheet('#composer', {
     head: `<span class="pr">$</span><span class="mono" style="font-size:14px">git commit</span>
       <input id="pInput" placeholder="which branch?" autocomplete="off" spellcheck="false" value="${esc(q)}">
       <button class="iconbtn" data-close>✕</button>`,
-    body: list.length ? `<div class="plist" style="padding:11px">${out}</div>`
-      : `<div class="muted" style="padding:26px 16px;font-size:13px">No branch matches.
-         <b>Enter</b> creates one called <span class="mono">${esc(q)}</span>.</div>`,
+    body: `<div id="pList"></div>`,
     foot: `<span class="muted mono" style="font-size:11px"><kbd>↑↓</kbd> pick &nbsp; <kbd>↵</kbd> select</span>
       <a class="peek" id="pNew" style="margin-left:auto;cursor:pointer">＋ new branch</a>`,
   });
   $('[data-close]').onclick = closeAll;
   $('#pNew').onclick = () => { closeAll(); openWizard(); };
-  $$('#composer [data-pick]').forEach(el => el.onclick = () => {
-    target = S.vault.branches.flatMap(b => b.topics).find(t => t.full === el.dataset.pick);
-    composerForm(target, dk);
-  });
   const inp = $('#pInput');
-  inp.oninput = () => { psel = 0; composerPick(dk, inp.value); };
+  let list = [];
+  const renderList = () => {
+    const all = pickList(), qq = inp.value.toLowerCase();
+    list = all.filter(x => !qq || x.t.full.includes(qq)
+      || x.b.title.toLowerCase().includes(qq) || x.b.group.includes(qq));
+    psel = Math.max(0, Math.min(psel, list.length - 1));
+    let out = '', lastR = -1;
+    list.forEach((x, i) => {
+      if (x.r !== lastR && !qq) { lastR = x.r; out += `<div class="psec">${['Due today', 'Checked out', 'Parked'][x.r]}</div>`; }
+      out += `<button class="pitem${i === psel ? ' sel' : ''}" data-pick="${esc(x.t.full)}" style="--bc:${x.b.color}">
+        <span class="sw"></span><span>${esc(x.b.emoji)}</span><span class="nm">${esc(x.t.full)}</span>
+        <span class="d">${esc((x.t.metrics || []).map(m => m.k).join(' · ') || 'message only')}</span></button>`;
+    });
+    $('#pList').innerHTML = list.length ? `<div class="plist" style="padding:11px">${out}</div>`
+      : `<div class="muted" style="padding:26px 16px;font-size:13px">No branch matches.
+         <b>Enter</b> creates one called <span class="mono">${esc(inp.value)}</span>.</div>`;
+    $$('#pList [data-pick]').forEach(el => el.onclick = () => {
+      target = S.vault.branches.flatMap(b => b.topics).find(t => t.full === el.dataset.pick);
+      composerForm(target, dk);
+    });
+  };
+  renderList();
+  inp.oninput = () => { psel = 0; renderList(); };
   inp.onkeydown = (e) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); psel = Math.min(psel + 1, list.length - 1); composerPick(dk, inp.value); }
-    if (e.key === 'ArrowUp')   { e.preventDefault(); psel = Math.max(psel - 1, 0); composerPick(dk, inp.value); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); psel = Math.min(psel + 1, list.length - 1); renderList(); }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); psel = Math.max(psel - 1, 0); renderList(); }
     if (e.key === 'Enter') {
       e.preventDefault();
       if (!list.length) { closeAll(); openWizard(inp.value); return; }
