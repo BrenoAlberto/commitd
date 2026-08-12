@@ -41,6 +41,15 @@ export function landingView() {
       ${heroCard()}
     </div>
 
+    <div class="trust">
+      <div><dt>No servers</dt><dd>commitd is a static page. There is no backend to breach, no database to leak,
+        nothing to go down.</dd></div>
+      <div><dt>No data held</dt><dd>We couldn't read your habits if we wanted to — every byte lives in your
+        repository, private or public, on your account.</dd></div>
+      <div><dt>No lock-in</dt><dd>It's just git. Clone your vault, grep it, take it anywhere — commitd disappearing
+        costs you nothing.</dd></div>
+    </div>
+
     <div class="pt"><h3>The model</h3>
       <p>A <b>branch</b> is a habit — <span class="mono">gym</span>, <span class="mono">read</span>,
         <span class="mono">quit-smoking</span> — a long-lived line of work. A <b>commit</b> is one instance of

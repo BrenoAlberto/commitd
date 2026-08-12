@@ -623,6 +623,14 @@ textarea.inp{resize:vertical;min-height:72px;font-family:var(--face)}
   .land .hero .cta{justify-content:center}
   .vcard{margin-inline:auto}
 }
+/* the trust strip — the whole pitch in one scan */
+.land .trust{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 30px;
+  border-block:1px solid var(--rule);padding:20px 0 22px;margin-top:38px}
+.land .trust dt{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--good);margin-bottom:6px}
+.land .trust dd{font-size:13px;color:var(--ink3);line-height:1.6;max-width:34ch}
+@media(max-width:640px){.land .trust>div{padding-block:10px}}
+
 /* the hero's mock vault card */
 .vcard{border:1px solid var(--rule);border-radius:5px;background:var(--plane);padding:18px 20px;max-width:340px;justify-self:end}
 @media(max-width:880px){.vcard{justify-self:center}}
