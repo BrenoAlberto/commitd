@@ -133,11 +133,11 @@ function drawWizard() {
         <div class="mgrid3" style="grid-template-columns:64px 1fr">
           <input class="inp" id="w_emoji" value="${esc(wiz.emoji)}" style="text-align:center;font-size:19px">
           <input class="inp" id="w_title" value="${esc(wiz.title)}"
-            placeholder="${t ? 'What is this focus? e.g. N4 grammar' : 'What are you practising? e.g. Practice guitar'}"></div>
+            placeholder="${t ? 'What is the current focus? e.g. Couch to 5K' : 'What are you building? e.g. Gym, Reading, Quit smoking'}"></div>
         <div class="hint">→ <span class="mono">${esc(t ? `${t}/${id}` : id)}</span> · stored at
           <span class="mono">branches/${esc(t ? `${t}/topics/${id}` : id)}/</span></div></div>
       ${t ? `<div class="wsec"><label class="lbl" style="display:block;margin-bottom:8px">Goal — one sentence</label>
-        <input class="inp" id="w_goal" value="${esc(wiz.goal)}" placeholder="All 92 kana, recognised in under 2 seconds.">
+        <input class="inp" id="w_goal" value="${esc(wiz.goal)}" placeholder="Run 5K without stopping, by the end of March.">
         <div class="hint">Cadence is inherited from <span class="mono">${esc(t)}</span>. A topic branch never has its
         own streak — that is the whole point.</div></div>`
       : `<div class="wsec"><label class="lbl" style="display:block;margin-bottom:8px">Group</label>
@@ -153,7 +153,7 @@ function drawWizard() {
       </div>`}
       <div class="wsec"><label class="lbl" style="display:block;margin-bottom:10px">Metrics</label>
         ${wiz.metrics.map((m, i) => `<div class="mrow">
-          <input class="inp" data-mi="${i}" data-mf="label" value="${esc(m.label)}" placeholder="Label e.g. Kana">
+          <input class="inp" data-mi="${i}" data-mf="label" value="${esc(m.label)}" placeholder="Label e.g. Minutes">
           <select class="inp" data-mi="${i}" data-mf="type">${METRIC_TYPES.map(([k, l]) => `<option value="${k}"${m.type === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
           <input class="inp" data-mi="${i}" data-mf="unit" value="${esc(m.unit)}" placeholder="unit">
           <select class="inp" data-mi="${i}" data-mf="dir">

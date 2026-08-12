@@ -144,7 +144,7 @@ export async function rebuildIndex() {
     S.vault = fresh;
     await S.gh.commitFiles(V.metaFiles(fresh), 'rebuild index');
     busy(null); store.emit();
-    toast('Index rebuilt from the logs — the cache is never the source of truth.');
+    toast('Rebuilt from your logs — everything is in sync.');
   } catch (e) { busy(null); errToast(e); }
 }
 export async function loadHistory(b) {

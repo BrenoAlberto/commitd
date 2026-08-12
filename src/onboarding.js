@@ -12,46 +12,61 @@ import { sechead } from './views.js';
 export const DEFAULT_REPO = 'commitd-vault';
 
 /* ═══════════ landing ═══════════ */
+function heroCard() {
+  const lv = (i) => Math.max(0, Math.round(Math.sin(i * 12.9898) * 43758.5453 % 1 * 6) - 1);
+  const cells = Array.from({ length: 7 * 26 }, (_, i) => `<i class="l${Math.min(4, lv(i))}"></i>`).join('');
+  return `<div class="vcard" aria-hidden="true">
+    <div class="vhead"><span class="dot" style="background:var(--good)"></span>you/habits · 3 branches</div>
+    <div class="vgrid">${cells}</div>
+    <div class="vrow"><span class="sw" style="background:var(--good)"></span>gym<span class="st">12d · 94%</span></div>
+    <div class="vrow"><span class="sw" style="background:#7aa2f7"></span>read<span class="st">47d · 98%</span></div>
+    <div class="vrow"><span class="sw" style="background:#e0af68"></span>quit-smoking<span class="st">231 days clean</span></div>
+  </div>`;
+}
 export function landingView() {
   return `<div class="center land">
     <div class="hero">
-      <div class="kicker">a daemon for the habits you keep</div>
-      <h1>Your habits,<br>as a git repository.</h1>
-      <p class="sub">commitd is a habit tracker that treats your life like a repo. It runs entirely in your browser,
-        and stores every byte in a single GitHub repository that you own. No server, no database, no account with us —
-        because there is no us.</p>
-      <div class="cta">
-        <button class="btn btn-p" data-act="connect">Connect GitHub</button>
-        <button class="btn btn-g" data-act="viewpublic">View someone's public vault</button>
+      <div>
+        <div class="kicker">a daemon for the habits you keep</div>
+        <h1>Your habits,<br>as a git repository.</h1>
+        <p class="sub">The mental model you already trust — branches, commits, a green grid — pointed at your life.
+          Every workout, every page read, every day quit lives in one private GitHub repo that you own.
+          No server, no account, no subscription. There is no us.</p>
+        <div class="cta">
+          <button class="btn btn-p" data-act="connect">Connect GitHub</button>
+          <a class="btn btn-g" href="https://github.com/BrenoAlberto/commitd" target="_blank" rel="noopener">Read the source ↗</a>
+        </div>
+        <p class="hint" style="margin-top:14px">Someone shared a vault with you? <a data-act="viewpublic" style="cursor:pointer;text-decoration:underline">Open it here</a>.</p>
       </div>
+      ${heroCard()}
     </div>
 
-    <div class="pt"><h3>The idea</h3>
-      <p>A <b>branch</b> is a habit — a long-lived line of work running in parallel with your other lines of work.
-        A <b>commit</b> is one instance of doing it: a message, some numbers, a couple of tags.</p>
-      <p>A habit outlives its metrics. "14 kana" is true for six weeks; <span class="mono">practice-japanese</span>
-        runs for years. So the metrics live on a <b>topic branch</b> — <span class="mono">practice-japanese/kana</span>,
-        then <span class="mono">/vocab</span>, then <span class="mono">/grammar</span> — which merges into the parent
-        when it's learned. The streak never notices.</p>
-      <p>And when a habit no longer needs tracking, you <b>merge it into main</b>: the record of things that are simply
-        part of how you live now. The goal was never to track forever. The goal is to merge.</p></div>
+    <div class="pt"><h3>The model</h3>
+      <p>A <b>branch</b> is a habit — <span class="mono">gym</span>, <span class="mono">read</span>,
+        <span class="mono">quit-smoking</span> — a long-lived line of work. A <b>commit</b> is one instance of
+        showing up: a message, numbers if you want them.</p>
+      <p>Goals change; habits persist. <span class="mono">run</span> is for life,
+        <span class="mono">run/couch-to-5k</span> is for twelve weeks — so the goal and its numbers live on a
+        <b>topic branch</b> that merges back when it's done. The streak never notices.</p>
+      <p>And when showing up stops needing a tracker, you <b>merge the habit into main</b>: the record of things
+        that are simply how you live now. The goal was never to track forever. The goal is to merge.</p></div>
 
     <div class="pt"><h3>What it does differently</h3>
       <dl class="cols">
         <div><dt>Cadence, not guilt</dt><dd>A 3×/week branch keeps its streak through a rest day. Uptime sits next to
           the streak, because 94% survives one bad Tuesday and a streak doesn't.</dd></div>
-        <div><dt>Abstain branches</dt><dd>For quitting, the grid fills green on its own and a commit is a relapse —
-          logged without judgement, because a hidden relapse is the one that wins.</dd></div>
-        <div><dt>Real git commits</dt><dd>Each entry is one atomic commit with the author date set to the day you
-          logged. Your habits show up on your own GitHub contribution graph.</dd></div>
-        <div><dt>Plain text forever</dt><dd><span class="mono">branches/&lt;name&gt;/log/YYYY-MM.jsonl</span>. If this app
-          vanishes, <span class="mono">grep</span> still works.</dd></div>
+        <div><dt>Quitting counts too</dt><dd>An abstain branch fills the grid green on its own; a commit is a relapse,
+          logged without judgement — because a hidden relapse is the one that wins.</dd></div>
+        <div><dt>Your real contribution graph</dt><dd>Each entry is one true git commit, dated the day it happened.
+          Showing up for yourself looks exactly like shipping.</dd></div>
+        <div><dt>Plain text forever</dt><dd>One JSON line per entry, in files you can read. If commitd vanished
+          tomorrow, your data is still yours — <span class="mono">grep</span> still works.</dd></div>
       </dl></div>
 
-    <div class="pt"><h3>What it asks for</h3>
-      <p>You install the commitd GitHub App on <b>one repository</b> — the vault — and that is everything it can
-        ever see. Nothing else in your account is reachable. The session lives in this tab; signing back in is one
-        click, because GitHub remembers the authorization.</p>
+    <div class="pt"><h3>Yours, verifiably</h3>
+      <p>commitd is a static page and one small GitHub App. You install the app on <b>one repository</b> — the
+        vault — and that is everything it can ever see. No analytics, no tracking, nothing phoned home; the source
+        is short enough to read in an afternoon.</p>
       <p class="muted" style="font-size:13px;margin-top:12px">Your vault stays <b>private</b> unless you decide
         otherwise. Make it public later and anyone with the link gets a read-only view.</p></div>
   </div>`;
@@ -177,13 +192,14 @@ export function pickRepoView() {
 export function accountView(v) {
   const pub = v.repo && !v.repo.private;
   const share = `${location.origin}${location.pathname}#/u/${v.repo?.owner}/${v.repo?.name}`;
-  const rate = S.gh?.rate;
+  const active = v.branches.filter(b => !b.mergedAt).length;
+  const merged = v.branches.length - active;
   return `<div class="center" style="padding-top:8px">
     <button class="back" data-sec="today">← today</button>
     <div class="hero"><h1 style="font-size:36px">Vault</h1>
       <p><span class="mono">${esc(v.repo?.owner || '')}/${esc(v.repo?.name || '')}</span> ·
-        schema v${v.meta?.schemaVersion ?? 1} · ${v.branches.length} branches ·
-        day boundary ${String(v.meta?.dayBoundary ?? 0).padStart(2,'0')}:00</p></div>
+        ${active} active branch${active === 1 ? '' : 'es'}${merged ? ` · ${merged} merged` : ''} ·
+        ${pub ? 'public' : 'private'}</p></div>
 
     ${sechead('Visibility')}
     <div class="vis${pub ? '' : ' on'}" data-vis="private"><span class="dot"></span><div>
@@ -209,13 +225,10 @@ export function accountView(v) {
         renders your grid in ASCII.</div></div>` : ''}
 
     ${sechead('Maintenance')}
-    <div class="srow"><div><div class="k">Rebuild index</div>
-      <div class="sub"><span class="mono">.commitd/index.json</span> is a cache, never the source of truth. This
-        re-reads every log file and regenerates it — the answer to any sync weirdness.</div></div>
+    <div class="srow"><div><div class="k">Rebuild from logs</div>
+      <div class="sub">Something looks out of sync — a missing commit, a wrong streak? This re-reads every log in
+        the repository and rebuilds the app's view from scratch. Your data is never touched.</div></div>
       <button class="btn btn-g" data-act="rebuild">rebuild</button></div>
-    <div class="srow"><div><div class="k">API budget</div>
-      <div class="sub">Reads are ETag-cached, so a warm load costs 304s. A heavy day is about 40 requests.</div></div>
-      <span class="rate">${rate ? `${rate.remaining} / 5000 left` : '—'}</span></div>
 
     ${sechead('Session')}
     <div class="srow"><div><div class="k">Signed in as ${esc(S.auth?.identity()?.login || '')}</div>
