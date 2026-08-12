@@ -12,6 +12,7 @@
 
 import { key, parse, addD, dayDiff, MONTHS, pool, shortSha } from './util.js';
 import { hydrate } from './model.js';
+import { t as i18nt } from './i18n.js';
 import { DEFAULT_GROUPS } from './theme.js';
 
 export const SCHEMA = 1;
@@ -105,7 +106,7 @@ export function vaultFromIndex(json, meta = {}) {
 
 /* ── cold read ───────────────────────────────────────────── */
 export async function loadVault(gh, { onProgress = () => {} } = {}) {
-  onProgress('reading vault');
+  onProgress(i18nt('reading vault'));
   const metaRaw = await gh.readFile(paths.meta());
   if (!metaRaw) return null;                       // not a commitd vault
   const meta = JSON.parse(metaRaw);
@@ -114,7 +115,7 @@ export async function loadVault(gh, { onProgress = () => {} } = {}) {
     try { return { ...vaultFromIndex(ixRaw, { meta }), meta }; }
     catch { /* corrupt cache: fall through and rebuild */ }
   }
-  onProgress('no index — rebuilding from logs');
+  onProgress(i18nt('no index — rebuilding from logs'));
   return rebuildVault(gh, meta, onProgress);
 }
 
@@ -123,7 +124,7 @@ export async function rebuildVault(gh, meta, onProgress = () => {}) {
   const tree = await gh.tree();
   const bySha = Object.fromEntries(tree.map(n => [n.path, n.sha]));
   const branchFiles = tree.filter(n => /^branches\/[^/]+\/branch\.json$/.test(n.path));
-  onProgress(`reading ${branchFiles.length} branches`);
+  onProgress(i18nt('reading {0} branches', branchFiles.length));
 
   const branches = await pool(branchFiles, 6, async (n) => {
     const id = n.path.split('/')[1];

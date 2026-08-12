@@ -5,6 +5,7 @@ import { $, $$, esc, key, parse, addD, fmtDate, rel } from './util.js';
 import { S, store, setTheme } from './store.js';
 import { GitHub } from './github.js';
 import { OAuthAuth } from './auth.js';
+import { t, t as tr, lang, setLang, LANGS } from './i18n.js';
 import * as V from './vault.js';
 import * as M from './model.js';
 import * as A from './actions.js';
@@ -45,7 +46,7 @@ function chrome() {
     + (S.readonly ? '' : `<button class="plus" data-act="commit"><i>＋</i></button>`)
     + SECTIONS.slice(2).map(([k, l, g]) => `<button data-sec="${k}" class="${!inEntity && sec === k ? 'on' : ''}"><span class="glyph">${g}</span>${l}</button>`).join('');
   $('#vaultChip').innerHTML = v?.repo
-    ? `${esc(v.repo.owner)}/<b>${esc(v.repo.name)}</b>${v.repo.private ? '' : ' <span class="muted">public</span>'}`
+    ? `${esc(v.repo.owner)}/<b>${esc(v.repo.name)}</b>${v.repo.private ? '' : ` <span class="muted">${t('public')}</span>`}`
     : 'commitd';
   $('#vaultChip').style.display = v ? '' : 'none';
   $('#avatar').textContent = (ident?.login || v?.repo?.owner || '?').slice(0, 1).toUpperCase();
@@ -89,7 +90,7 @@ function sidebar() {
   $('#brlist').innerHTML = html || '<div class="muted" style="font-size:12px;padding:8px">Nothing matches.</div>';
   const parked = active.filter(b => !b.checkedOut).length;
   $('#sparseFoot').innerHTML = S.readonly ? ''
-    : `${parked} branch${parked === 1 ? '' : 'es'} in the vault but not checked out — <a data-act="sparse">sparse-checkout</a>`;
+    : `${t(parked === 1 ? '{0} branch in the vault but not checked out —' : '{0} branches in the vault but not checked out —', parked)} <a data-act="sparse">sparse-checkout</a>`;
   $('#newBranch').style.display = S.readonly ? 'none' : '';
   const merged = v.branches.filter(b => b.mergedAt);
   $('#mergedWrap').style.display = merged.length ? '' : 'none';
@@ -102,20 +103,20 @@ function sidebar() {
 function render() {
   const r = S.route, v = S.vault, main = $('#main');
   $('#banner').innerHTML = S.readonly && v ? onb.publicBanner(v) : '';
-  if (r.name === 'boot')    main.innerHTML = `<div class="boot"><span class="spin"></span>${esc(S.busy || 'starting')}</div>`;
+  if (r.name === 'boot')    main.innerHTML = `<div class="boot"><span class="spin"></span>${esc(S.busy || t('starting'))}</div>`;
   else if (r.name === 'home' && !v)    main.innerHTML = onb.landingView();
   else if (r.name === 'connect')       main.innerHTML = onb.connectView();
   else if (r.name === 'pubprompt')     main.innerHTML = onb.publicPrompt();
-  else if (r.name === 'error')         main.innerHTML = `<div class="center land"><h1 style="font-size:34px">That didn't work</h1>
-      <div class="err">${esc(S.error)}</div><button class="btn btn-g" data-act="home">back</button></div>`;
+  else if (r.name === 'error')         main.innerHTML = `<div class="center land"><h1 style="font-size:34px">${t("That didn't work")}</h1>
+      <div class="err">${esc(S.error)}</div><button class="btn btn-g" data-act="home">${t('back')}</button></div>`;
   else if (r.name === 'install')       main.innerHTML = onb.installView();
   else if (r.name === 'pickrepo')      main.innerHTML = onb.pickRepoView();
   else if (r.name === 'pubwarn')       main.innerHTML = onb.pubWarnView();
   else if (!v)                          main.innerHTML = onb.landingView();
   else if (r.name === 'branch') {
     const b = v.branches.find(x => x.id === r.branch);
-    if (!b) main.innerHTML = `<div class="center land"><h1 style="font-size:30px">No such branch</h1>
-      <button class="btn btn-g" data-sec="vault">back to vault</button></div>`;
+    if (!b) main.innerHTML = `<div class="center land"><h1 style="font-size:30px">${t('No such branch')}</h1>
+      <button class="btn btn-g" data-sec="vault">${t('back to vault')}</button></div>`;
     else if (r.topic) {
       const t = b.topics.find(x => x.id === r.topic);
       main.innerHTML = t ? views.topicView(v, t) : views.branchView(v, b);
@@ -164,7 +165,7 @@ function wire() {
   $$('[data-newtopic]').forEach(el => el.onclick = () => openWizard('', el.dataset.newtopic));
   $$('[data-merge]').forEach(el => el.onclick = () => {
     const b = v.branches.find(x => x.id === el.dataset.merge);
-    if (confirm(`Merge ${b.id} into main?\n\nThe branch closes and its history squashes into main. The grid stays forever.`)) A.mergeBranch(b);
+    if (confirm(`${t('Merge {0} into main?', b.id)}\n\n${t('The branch closes and its history squashes into main. The grid stays forever.')}`)) A.mergeBranch(b);
   });
   $$('[data-mergetopic]').forEach(el => el.onclick = () => {
     const [bid, tid] = el.dataset.mergetopic.split('/');
@@ -190,6 +191,17 @@ function wire() {
   $$('[data-gridmode]').forEach(el => el.onclick = () => {
     S.gridMode = el.dataset.gridmode; localStorage.setItem('commitd.gridmode', S.gridMode); render();
   });
+  $$('[data-setlang]').forEach(el => el.onclick = async () => {
+    const l = el.dataset.setlang;
+    if (l === lang) return;
+    if (S.gh && S.vault?.meta && !S.readonly) {
+      try {
+        S.vault.meta.lang = l;
+        await S.gh.commitFiles([{ path: 'commitd.json', content: JSON.stringify(S.vault.meta, null, 2) }], 'settings: language');
+      } catch { /* preference still applies on this device */ }
+    }
+    setLang(l);
+  });
   if (S.route.name === 'connect') onb.wireConnect();
   if (S.route.name === 'pubprompt') $('#pubGo').onclick = () =>
     go(`#/u/${$('#pubOwner').value.trim()}/${$('#pubRepo').value.trim() || onb.DEFAULT_REPO}`);
@@ -203,7 +215,7 @@ function act(name) {
     case 'sparse': openSparse(); break;
     case 'rebuild': A.rebuildIndex(); break;
     case 'more': S.logN = (S.logN || 40) + 40; render(); break;
-    case 'copy': { const i = $('#shareUrl'); i.select(); navigator.clipboard?.writeText(i.value); toast('Link copied'); break; }
+    case 'copy': { const i = $('#shareUrl'); i.select(); navigator.clipboard?.writeText(i.value); toast(t('Link copied')); break; }
     case 'signout': S.auth?.signOut(); S.vault = null; S.gh = null; S.route = { name: 'home' }; location.hash = '#/'; render(); break;
     case 'recheck': onb.resolveVault(S.auth, onReadyVault, onErrorVault); break;
   }
@@ -216,17 +228,16 @@ function confirmVisibility(makePublic) {
   openSheet('#composer', {
     head: `<span class="pr">$</span><span class="mono" style="font-size:14px">gh repo edit --visibility public</span>
       <button class="iconbtn" data-close style="margin-left:auto">✕</button>`,
-    body: `<div style="padding:18px"><p style="font-size:14px;line-height:1.6">You are about to make
-      <span class="mono">${esc(v.repo.owner)}/${esc(v.repo.name)}</span> readable by anyone on the internet.</p>
-      <div class="expose" style="margin-top:14px">That includes:
-        <ul><li>every branch name, README and goal</li>
-          <li><b>every commit message you have ever written</b></li>
-          <li>every metric value, date and time of day</li>
-          <li>relapses on abstain branches</li></ul></div>
-      <p class="hint">Nobody else can write to it — they have no token, and GitHub will not accept commits from them.
-        Turning it back to private stops new readers, but anything already copied stays copied.</p></div>`,
-    foot: `<button class="btn btn-g" data-close>cancel</button>
-      <button class="btn btn-p" id="visGo">make it public</button>`,
+    body: `<div style="padding:18px"><p style="font-size:14px;line-height:1.6">${t('You are about to make')}
+      <span class="mono">${esc(v.repo.owner)}/${esc(v.repo.name)}</span> ${t('readable by anyone on the internet.')}</p>
+      <div class="expose" style="margin-top:14px">${t('That includes:')}
+        <ul><li>${t('every branch name, README and goal')}</li>
+          <li>${t('<b>every commit message you have ever written</b>')}</li>
+          <li>${t('every metric value, date and time of day')}</li>
+          <li>${t('relapses on abstain branches')}</li></ul></div>
+      <p class="hint">${t('Nobody else can write to it — they have no token, and GitHub will not accept commits from them. Turning it back to private stops new readers, but anything already copied stays copied.')}</p></div>`,
+    foot: `<button class="btn btn-g" data-close>${t('cancel')}</button>
+      <button class="btn btn-p" id="visGo">${t('make it public')}</button>`,
   });
   $$('[data-close]').forEach(el => el.onclick = closeAll);
   $('#visGo').onclick = () => { closeAll(); A.setVisibility(true); };
@@ -236,15 +247,13 @@ function openSparse() {
   openSheet('#composer', {
     head: `<span class="pr">$</span><span class="mono" style="font-size:14px">git sparse-checkout set</span>
       <button class="iconbtn" data-close style="margin-left:auto">✕</button>`,
-    body: `<div style="padding:18px"><p class="hint" style="margin:0 0 14px">Everything stays in the vault and keeps
-      its history. Checking a branch out just means it appears in the sidebar and in today's queue. Park the ones you
-      are not working on — <b>a habit you are not currently running should not cost you attention every morning.</b></p>
+    body: `<div style="padding:18px"><p class="hint" style="margin:0 0 14px">${t("Everything stays in the vault and keeps its history. Checking a branch out just means it appears in the sidebar and in today's queue. Park the ones you are not working on —")} <b>${t('a habit you are not currently running should not cost you attention every morning.')}</b></p>
       ${v.groups.map((g) => { const items = v.branches.filter(b => !b.mergedAt && b.group === g.id);
         if (!items.length) return '';
         return `<div class="wsec"><label class="lbl" style="display:block;margin-bottom:8px">${esc(g.label)}</label>
           <div class="chipsel">${items.map(b => `<button class="${b.checkedOut ? 'on' : ''}" data-co="${esc(b.id)}">${b.checkedOut ? '●' : '○'} ${esc(b.id)}</button>`).join('')}</div></div>`;
       }).join('')}</div>`,
-    foot: `<button class="btn btn-p" data-close style="margin-left:auto">done</button>`,
+    foot: `<button class="btn btn-p" data-close style="margin-left:auto">${t('done')}</button>`,
   });
   $$('[data-close]').forEach(el => el.onclick = () => { closeAll(); render(); });
   $$('#composer [data-co]').forEach(el => el.onclick = async () => {
@@ -263,7 +272,7 @@ function dayTip(dk) {
     return `<div class="t-r"><span class="sw" style="background:${c.topic.color}"></span>
       <span style="font-size:11.5px">${c.relapse ? 'relapse' : esc(c.topic.full)}</span>
       <span class="v">${val != null ? esc(val) + esc(m0.unit || '') : '✓'}</span></div>`;
-  }).join('') : '<div class="sec" style="font-size:11.5px">no commits</div>';
+  }).join('') : `<div class="sec" style="font-size:11.5px">${t('no commits')}</div>`;
   return `<div class="t-d">${fmtDate(d)}${dk === v.today ? ' · today' : ''}</div>${body}`;
 }
 function openDrawer(dk) {
@@ -275,7 +284,7 @@ function openDrawer(dk) {
       <button class="iconbtn" style="margin-left:auto" id="dClose">✕</button></div>
     <div class="log" style="padding:6px 20px">${rows.length ? logList(rows)
       : `<div style="padding:38px 0;text-align:center"><div style="font-size:24px;opacity:.3">◻︎</div>
-         <p class="muted" style="margin-top:10px;font-size:13px">Nothing committed on this day.</p></div>`}</div>
+         <p class="muted" style="margin-top:10px;font-size:13px">${t('Nothing committed on this day.')}</p></div>`}</div>
     ${S.readonly ? '' : `<div style="padding:16px 20px;display:flex;gap:9px;border-top:1px solid var(--rule)">
       <button class="btn btn-g" id="dAdd">＋ commit</button></div>`}`;
   $('#drawer').classList.add('on'); $('#scrim').classList.add('on');
@@ -287,23 +296,23 @@ function openDrawer(dk) {
 
 /* ── palette commands ────────────────────────────────────── */
 function commands() {
-  const v = S.vault; if (!v) return [{ t: 'connect github', d: 'get started', run: () => go('#/connect') }];
+  const v = S.vault; if (!v) return [{ t: 'connect github', d: t('get started'), run: () => go('#/connect') }];
   const active = v.branches.filter(b => !b.mergedAt);
   const rw = !S.readonly;
   return [
-    ...(rw ? [{ t: 'commit', d: 'log an instance', k: 'c', run: () => openComposer() }] : []),
+    ...(rw ? [{ t: 'commit', d: t('log an instance'), k: 'c', run: () => openComposer() }] : []),
     ...SECTIONS.map(([k, l, g]) => ({ t: `goto ${k}`, d: l, ico: g, run: () => goSection(k) })),
     ...(rw ? active.flatMap(b => b.topics.filter(t => !t.closed).map(t =>
       ({ t: `commit ${t.full}`, d: (t.metrics || []).map(m => m.k).join(' · '), ico: b.emoji, run: () => openComposer(t.full) }))) : []),
-    ...v.branches.map(b => ({ t: `checkout ${b.id}`, d: 'branch', ico: b.emoji, run: () => goBranch(b.id) })),
+    ...v.branches.map(b => ({ t: `checkout ${b.id}`, d: t('branch'), ico: b.emoji, run: () => goBranch(b.id) })),
     ...v.branches.flatMap(b => b.topics.filter(t => !t.implicit).map(t =>
-      ({ t: `checkout ${t.full}`, d: t.closed ? 'merged topic' : 'topic branch', run: () => goBranch(b.id, t.id) }))),
-    ...(rw ? [{ t: 'branch new', d: 'create a branch', run: () => openWizard() }] : []),
-    ...(rw ? active.map(b => ({ t: `checkout -b ${b.id}/<topic>`, d: 'new focus, same streak', ico: b.emoji, run: () => openWizard('', b.id) })) : []),
-    ...(rw ? [{ t: 'sparse-checkout', d: 'park branches you are not running', run: () => openSparse() }] : []),
-    ...(rw ? [{ t: 'vault settings', d: 'visibility, index, token', run: () => goSection('account') }] : []),
+      ({ t: `checkout ${t.full}`, d: t.closed ? tr('merged topic') : tr('topic branch'), run: () => goBranch(b.id, t.id) }))),
+    ...(rw ? [{ t: 'branch new', d: t('create a branch'), run: () => openWizard() }] : []),
+    ...(rw ? active.map(b => ({ t: `checkout -b ${b.id}/<topic>`, d: t('new focus, same streak'), ico: b.emoji, run: () => openWizard('', b.id) })) : []),
+    ...(rw ? [{ t: 'sparse-checkout', d: t('park branches you are not running'), run: () => openSparse() }] : []),
+    ...(rw ? [{ t: 'vault settings', d: t('visibility, index, session'), run: () => goSection('account') }] : []),
     ...(rw ? [{ t: 'rebuild index', d: '.commitd/index.json', run: () => A.rebuildIndex() }] : []),
-    { t: 'theme toggle', d: 'dark ⇄ light', k: 't', run: () => setTheme(S.theme === 'dark' ? 'light' : 'dark') },
+    { t: 'theme toggle', d: t('dark ⇄ light'), k: 't', run: () => setTheme(S.theme === 'dark' ? 'light' : 'dark') },
   ];
 }
 
@@ -311,7 +320,7 @@ function commands() {
 async function route() {
   const r = parseHash();
   if (r.name === 'public') {
-    S.route = { name: 'boot' }; S.busy = 'reading public vault'; render();
+    S.route = { name: 'boot' }; S.busy = t('reading public vault'); render();
     try {
       const vault = await onb.loadPublic(r.owner, r.repo);
       S.vault = vault; S.readonly = true; S.gh = null;
@@ -328,6 +337,17 @@ async function route() {
 
 async function boot() {
   document.documentElement.dataset.theme = S.theme;
+  /* static chrome strings live in index.html — translate them once here */
+  $('#openPalette span').textContent = t('Run a command');
+  $('#sFilter').placeholder = t('filter branches');
+  $('#newBranch').textContent = `＋ ${t('new branch')}`;
+  $('#fab').innerHTML = `＋ commit <kbd>c</kbd>`;
+  const h4s = $$('.side h4');
+  if (h4s[0]) h4s[0].textContent = t('Head');
+  if (h4s[1]) h4s[1].textContent = 'Branches';
+  if (h4s[2]) h4s[2].textContent = t('Merged into main');
+  const lb = $('#langBtn');
+  if (lb) { lb.textContent = lang === 'pt' ? 'EN' : 'PT'; lb.onclick = () => setLang(lang === 'pt' ? 'en' : 'pt'); }
   initSheets(); initPalette(commands);
   $('#themeBtn').onclick = () => setTheme(S.theme === 'dark' ? 'light' : 'dark');
   $('#openPalette').onclick = () => openPalette();
@@ -367,7 +387,15 @@ async function boot() {
   }
   S.route = r.name === 'connect' ? r : { name: 'home' }; render();
 }
+/* A language chosen in settings is stored in the vault (commitd.json) and
+   follows it to every device; with none stored, the device default rules. */
+function applyVaultLang(vault) {
+  const ml = vault?.meta?.lang;
+  if (ml && ml !== lang) { localStorage.setItem('commitd.lang', ml); location.reload(); return true; }
+  return false;
+}
 function onReadyVault({ gh, vault, auth }) {
+  if (applyVaultLang(vault)) return;
   S.gh = gh; S.vault = vault; S.auth = auth; S.readonly = false;
   location.hash === '#/today' ? route() : go('#/today');
 }
@@ -375,19 +403,20 @@ function onErrorVault(msg) { S.route = { name: 'error' }; S.error = msg; render(
 async function openVault(auth) {
   const who = auth.identity();
   if (!who?.login || !who?.repo) { auth.signOut(); S.route = { name: 'home' }; render(); return; }
-  S.route = { name: 'boot' }; S.busy = 'opening vault'; render();
+  S.route = { name: 'boot' }; S.busy = t('opening vault'); render();
   const gh = new GitHub({ token: auth.getToken(), owner: who.repoOwner || who.login, repo: who.repo });
   try {
     const info = await gh.repoInfo();
     gh.branch = info.default_branch || 'main';
     const vault = await V.loadVault(gh, { onProgress: (m) => { S.busy = m; render(); } });
-    if (!vault) throw new Error('That repository is not a commitd vault.');
+    if (!vault) throw new Error(t('That repository is not a commitd vault.'));
     vault.repo = { name: who.repo, private: info.private, url: info.html_url, owner: who.repoOwner || who.login };
+    if (applyVaultLang(vault)) return;
     S.gh = gh; S.vault = vault; S.readonly = false;
     route();
   } catch (e) {
     S.route = { name: 'error' };
-    S.error = e.status === 401 ? 'The stored token is no longer valid — it may have expired. Sign in again.' : (e.message || String(e));
+    S.error = e.status === 401 ? t('The stored token is no longer valid — it may have expired. Sign in again.') : (e.message || String(e));
     render();
   }
 }

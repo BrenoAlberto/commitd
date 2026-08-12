@@ -11,6 +11,8 @@
    What the app can reach is decided by the user on GitHub's install screen:
    commitd sees exactly the repositories it was installed on, nothing else. */
 
+import { t } from './i18n.js';
+
 export const OAUTH = {
   clientId: 'Iv23liO8GU9OD5FAGXOC',   // public identifier of the commitd-app GitHub App
   appSlug: 'commitd-app',
@@ -64,7 +66,7 @@ export class OAuthAuth {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: this.bundle.r }) });
     const o = await res.json();
-    if (!o.access_token) throw new Error(o.error_description || o.error || 'token refresh failed');
+    if (!o.access_token) throw new Error(o.error_description || o.error || t('token refresh failed'));
     this.persist(bundleFrom(o), this.who);
   }
 
@@ -94,7 +96,7 @@ export class OAuthAuth {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code }) });
     const o = await res.json();
-    if (!o.access_token) throw new Error(o.error_description || o.error || 'token exchange failed');
+    if (!o.access_token) throw new Error(o.error_description || o.error || t('token exchange failed'));
     this.bundle = bundleFrom(o);
     return this.bundle;
   }

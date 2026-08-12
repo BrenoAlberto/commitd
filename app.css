@@ -712,3 +712,10 @@ textarea.inp{resize:vertical;min-height:72px;font-family:var(--face)}
   .srow .btn{flex:1 1 auto}
   .vis p{max-width:none}
 }
+
+/* tag suggestions in the composer — one tap to reuse */
+.tagsug{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.tagsug:empty{display:none}
+.tagsug button{font-family:var(--mono);font-size:11px;padding:3px 9px;border:1px solid var(--rule);
+  border-radius:99px;color:var(--ink3);cursor:pointer}
+.tagsug button.on{color:var(--pri-fg);background:var(--pri);border-color:var(--pri)}

@@ -8,18 +8,19 @@ import { hydrate, recompute, addCommit, topicLevels, isAbstain, targetAt, cadenc
 import * as V from './vault.js';
 import { slotOf, shade, BRANCH_STEPS, TOPIC_STEPS } from './theme.js';
 import { toast, errToast, busy } from './ui.js';
+import { t as i18nt } from './i18n.js';
 
 const rw = () => !S.readonly && S.gh;
 
 async function persist(fn, label) {
-  if (!rw()) { toast('Read-only — nothing was written', 'err'); return false; }
+  if (!rw()) { toast(i18nt('Read-only — nothing was written'), 'err'); return false; }
   busy(label);
   try { await fn(); busy(null); return true; }
   catch (e) {
     busy(null);
     errToast(e.status === 403
-      ? 'GitHub refused that write. The token may not have Contents: read/write on this repo.'
-      : e.status === 404 ? 'Vault not found — check the repository still exists.' : e);
+      ? i18nt('GitHub refused that write. The token may not have Contents: read/write on this repo.')
+      : e.status === 404 ? i18nt('Vault not found — check the repository still exists.') : e);
     return false;
   }
 }
@@ -36,7 +37,7 @@ export async function commit(b, t, { message, metrics = {}, tags = [], date, lin
   const ok = await persist(async () => {
     const res = await V.writeCommit(S.gh, S.vault, b, t, c);
     c.sha = res.sha.slice(0, 7);
-  }, 'writing commit');
+  }, i18nt('writing commit'));
   if (ok) toast(`<span class="mono">[${t.full} ${c.sha}]</span> ${message ? message.slice(0, 40) : ''}`);
   store.emit();
   return c;
@@ -54,8 +55,8 @@ export function quickCommit(b) {
 /* ── branches ────────────────────────────────────────────── */
 export async function createBranch(def) {
   const v = S.vault, id = slug(def.title);
-  if (!id) { toast('Give it a name first', 'err'); return null; }
-  if (v.branches.some(b => b.id === id)) { toast(`A branch called ${id} already exists`, 'err'); return null; }
+  if (!id) { toast(i18nt('Give it a name first'), 'err'); return null; }
+  if (v.branches.some(b => b.id === id)) { toast(i18nt('A branch called {0} already exists', id), 'err'); return null; }
   const created = v.today;
   const b = { id, title: def.title.trim(), emoji: def.emoji || '🌱', group: def.group,
     checkedOut: true, created, cadence: def.cadence, why: def.why || '', mergedAt: null,
@@ -63,20 +64,20 @@ export async function createBranch(def) {
       gridMetric: def.metrics[0]?.k || null, metrics: def.metrics, commits: [] }] };
   v.branches.push(b);
   hydrate(v); store.emit();
-  const ok = await persist(() => V.writeBranch(S.gh, v, b, `branch ${id}: ${def.title}`), 'creating branch');
-  if (ok) toast(`<span class="mono">${id}</span> created · ${cadenceLabel(b)} · ${def.metrics.length} metric${def.metrics.length === 1 ? '' : 's'}`);
+  const ok = await persist(() => V.writeBranch(S.gh, v, b, `branch ${id}: ${def.title}`), i18nt('creating branch'));
+  if (ok) toast(`<span class="mono">${id}</span> ${i18nt('created')} · ${cadenceLabel(b)} · ${def.metrics.length} ${def.metrics.length === 1 ? i18nt('metric') : i18nt('metrics')}`);
   return b;
 }
 export async function createTopic(b, def) {
   const id = slug(def.title);
-  if (!id) { toast('Give it a name first', 'err'); return null; }
+  if (!id) { toast(i18nt('Give it a name first'), 'err'); return null; }
   if (b.topics.length === 1 && b.topics[0].implicit && !b.topics[0].commits.length) b.topics = [];
   const t = { id, title: def.title.trim(), goal: def.goal || '—', opened: S.vault.today, closed: null,
     implicit: false, gridMetric: def.metrics[0]?.k || null, metrics: def.metrics, commits: [] };
   b.topics.push(t);
   hydrate(S.vault); store.emit();
-  const ok = await persist(() => V.writeBranch(S.gh, S.vault, b, `checkout -b ${b.id}/${id}`), 'opening topic branch');
-  if (ok) toast(`<span class="mono">${b.id}/${id}</span> opened — new goal, new metrics, <b>same streak</b>`);
+  const ok = await persist(() => V.writeBranch(S.gh, S.vault, b, `checkout -b ${b.id}/${id}`), i18nt('opening topic branch'));
+  if (ok) toast(`<span class="mono">${b.id}/${id}</span> ${i18nt('opened — new goal, new metrics, <b>same streak</b>')}`);
   return t;
 }
 export async function mergeTopic(b, t) {
@@ -84,21 +85,21 @@ export async function mergeTopic(b, t) {
   t.closed = S.vault.today;
   recompute(b); store.emit();
   const rel = b.releases.at(-1);
-  const ok = await persist(() => V.writeBranch(S.gh, S.vault, b, `merge ${b.id}/${t.id} → ${b.id}${rel ? ` (${rel.v})` : ''}`), 'merging topic');
-  if (ok) toast(`<span class="mono">${b.id}/${t.id}</span> merged into <span class="mono">${b.id}</span> — ${t.commits.length} commits, tagged <span class="mono">${rel?.v || ''}</span>. The streak is untouched.`);
+  const ok = await persist(() => V.writeBranch(S.gh, S.vault, b, `merge ${b.id}/${t.id} → ${b.id}${rel ? ` (${rel.v})` : ''}`), i18nt('merging topic'));
+  if (ok) toast(`<span class="mono">${b.id}/${t.id}</span> ${i18nt('merged into')} <span class="mono">${b.id}</span> — ${t.commits.length} commits, ${i18nt('tagged')} <span class="mono">${rel?.v || ''}</span>. ${i18nt('The streak is untouched.')}`);
 }
 export async function mergeBranch(b) {
   if (b.mergedAt) return;
   b.mergedAt = S.vault.today;
   recompute(b); store.emit();
-  const ok = await persist(() => V.writeBranch(S.gh, S.vault, b, `merge ${b.id} → main`), 'merging branch');
-  if (ok) toast(`<span class="mono">${b.id}</span> merged into <span class="mono">main</span> — ${b.commits.length} commits, ${b.longest}-day best streak. It's yours now.`);
+  const ok = await persist(() => V.writeBranch(S.gh, S.vault, b, `merge ${b.id} → main`), i18nt('merging branch'));
+  if (ok) toast(`<span class="mono">${b.id}</span> ${i18nt('merged into')} <span class="mono">main</span> — ${i18nt("{0} commits, {1}-day best streak. It's yours now.", b.commits.length, b.longest)}`);
 }
 export async function setCadence(b, type, n) {
   b.cadence = /n_per/.test(type) ? { type, n: n || b.cadence.n || 3 } : { type };
   recompute(b); store.emit();
-  await persist(() => V.writeBranch(S.gh, S.vault, b, `${b.id}: cadence → ${cadenceLabel(b)}`), 'saving cadence');
-  toast(`cadence → <span class="mono">${cadenceLabel(b)}</span> · streak recomputed, no commit touched`);
+  await persist(() => V.writeBranch(S.gh, S.vault, b, `${b.id}: cadence → ${b.cadence.type}${b.cadence.n ? ' ' + b.cadence.n : ''}`), i18nt('saving cadence'));
+  toast(`${i18nt('cadence →')} <span class="mono">${cadenceLabel(b)}</span> ${i18nt('· streak recomputed, no commit touched')}`);
 }
 /* Raising a target appends a dated entry. Nothing in the past is re-judged. */
 export async function setTarget(b, t, mk, value) {
@@ -107,49 +108,49 @@ export async function setTarget(b, t, mk, value) {
   m.targets = m.targets.filter(x => x.from !== S.vault.today)
     .concat([{ from: S.vault.today, v: value }]).sort((a, c) => (a.from < c.from ? -1 : 1));
   store.emit();
-  await persist(() => V.writeBranch(S.gh, S.vault, b, `${t.full}: ${mk} target → ${value}`), 'saving target');
-  toast(`<span class="mono">${mk}</span> target → ${value} from today · earlier commits keep the old target`);
+  await persist(() => V.writeBranch(S.gh, S.vault, b, `${t.full}: ${mk} target → ${value}`), i18nt('saving target'));
+  toast(`<span class="mono">${mk}</span> ${i18nt('target → {0} from today · earlier commits keep the old target', value)}`);
 }
 export async function toggleCheckout(b) {
   b.checkedOut = !b.checkedOut;
   store.emit();
-  await persist(() => V.writeBranch(S.gh, S.vault, b, `sparse-checkout: ${b.checkedOut ? 'add' : 'remove'} ${b.id}`), 'saving');
-  toast(`<span class="mono">${b.id}</span> ${b.checkedOut ? 'checked out — back in the sidebar and the queue' : 'parked — history kept, attention returned'}`);
+  await persist(() => V.writeBranch(S.gh, S.vault, b, `sparse-checkout: ${b.checkedOut ? 'add' : 'remove'} ${b.id}`), i18nt('saving'));
+  toast(`<span class="mono">${b.id}</span> ${b.checkedOut ? i18nt('checked out — back in the sidebar and the queue') : i18nt('parked — history kept, attention returned')}`);
 }
 
 /* ── the vault itself ────────────────────────────────────── */
 export async function setVisibility(makePublic) {
   if (!rw()) return;
-  busy(makePublic ? 'making the repository public' : 'making the repository private');
+  busy(makePublic ? i18nt('making the repository public') : i18nt('making the repository private'));
   try {
     await S.gh.setVisibility(!makePublic);
     S.vault.repo.private = !makePublic;
     busy(null); store.emit();
     toast(makePublic
-      ? 'Vault is public. Anyone with the link can read it — nobody can write to it.'
-      : 'Vault is private again. Existing links stop resolving.');
+      ? i18nt('Vault is public. Anyone with the link can read it — nobody can write to it.')
+      : i18nt('Vault is private again. Existing links stop resolving.'));
   } catch (e) {
     busy(null);
     errToast(e.status === 403
-      ? 'Your token cannot change repository visibility — it needs Administration: read/write, or you can flip it on github.com.'
+      ? i18nt('Your token cannot change repository visibility — it needs Administration: read/write, or you can flip it on github.com.')
       : e);
   }
 }
 export async function rebuildIndex() {
   if (!rw()) return;
-  busy('rebuilding index from every log file');
+  busy(i18nt('rebuilding index from every log file'));
   try {
     const fresh = await V.rebuildVault(S.gh, S.vault.meta, (m) => busy(m));
     fresh.repo = S.vault.repo; fresh.meta = S.vault.meta;
     S.vault = fresh;
     await S.gh.commitFiles(V.metaFiles(fresh), 'rebuild index');
     busy(null); store.emit();
-    toast('Rebuilt from your logs — everything is in sync.');
+    toast(i18nt('Rebuilt from your logs — everything is in sync.'));
   } catch (e) { busy(null); errToast(e); }
 }
 export async function loadHistory(b) {
   if (!S.gh || b._full || S.readonly) return;
-  busy(`reading ${b.id} history`);
+  busy(i18nt('reading {0} history', b.id));
   try { await V.ensureHistory(S.gh, S.vault, b); busy(null); store.emit(); }
   catch (e) { busy(null); errToast(e); }
 }

@@ -1,6 +1,7 @@
 /* The rules. Everything here is derived from commits — nothing in this file
    is ever persisted, so a corrupt cache can always be thrown away. */
 import { key, parse, addD, dayDiff, WD } from './util.js';
+import { t } from './i18n.js';
 import { slotOf, shade, BRANCH_STEPS, TOPIC_STEPS, DEFAULT_GROUPS } from './theme.js';
 
 export const CADENCES = [
@@ -18,13 +19,13 @@ export const METRIC_TYPES = [
 
 export const isAbstain = (b) => b.cadence?.type === 'abstain';
 export const cadenceLabel = (b) => ({
-  daily: 'every day', weekdays: 'weekdays', abstain: 'abstain · a clean day is a win',
-  n_per_week: `${b.cadence.n}× per week`, n_per_month: `${b.cadence.n}× per month`,
-  open: 'no target',
-}[b.cadence?.type] || 'no target');
+  daily: t('every day'), weekdays: t('weekdays'), abstain: t('abstain · a clean day is a win'),
+  n_per_week: t('{0}× per week', b.cadence.n), n_per_month: t('{0}× per month', b.cadence.n),
+  open: t('no target'),
+}[b.cadence?.type] || t('no target'));
 export const statusLabel = (b, s) => ({
-  pass: isAbstain(b) ? 'clean' : 'on cadence', pend: 'due today',
-  fail: isAbstain(b) ? 'relapse logged today' : 'behind cadence', merged: 'part of main',
+  pass: isAbstain(b) ? t('clean') : t('on cadence'), pend: t('due today'),
+  fail: isAbstain(b) ? t('relapse logged today') : t('behind cadence'), merged: t('part of main'),
 }[s]);
 
 export const targetAt = (m, dk) => {
@@ -180,6 +181,13 @@ export function addCommit(b, t, c) {
 /* ── cross-branch views ──────────────────────────────────── */
 export const dueToday = (v) => v.branches.filter(
   b => !b.mergedAt && b.checkedOut && !isAbstain(b) && b.st !== 'pass');
+
+/* Every tag ever used, most-used first — the composer offers them back. */
+export function allTags(vault) {
+  const f = {};
+  vault.branches.forEach(b => b.commits.forEach(c => (c.tags || []).forEach(tg => { f[tg] = (f[tg] || 0) + 1; })));
+  return Object.entries(f).sort((a, b) => b[1] - a[1]).map(([k]) => k);
+}
 
 export function unifiedDays(vault, from, days) {
   const m = {}, counts = [];

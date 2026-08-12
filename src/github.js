@@ -6,6 +6,7 @@
       up on your own GitHub contribution graph. */
 
 import { b64encode, b64decode, pool } from './util.js';
+import { t as i18nt } from './i18n.js';
 
 const API = 'https://api.github.com';
 const RAW = 'https://raw.githubusercontent.com';
@@ -113,7 +114,7 @@ export class GitHub {
       } catch (e) { if (e.status !== 404 && e.status !== 409) throw e; }
       await new Promise(r => setTimeout(r, 700));
     }
-    throw new GitHubError(404, 'the new repository is still initialising — give it a few seconds and try again');
+    throw new GitHubError(404, i18nt('the new repository is still initialising — give it a few seconds and try again'));
   }
 
   /* ── the atomic write ──────────────────────────────────── */
@@ -192,7 +193,7 @@ export class PublicReader {
       { headers: { Accept: 'application/vnd.github.raw' } });
     this.via = 'api';
     if (res.status === 404) return null;
-    if (res.status === 403) throw new GitHubError(403, 'GitHub rate-limited this network for anonymous reads. Try again in a few minutes.');
+    if (res.status === 403) throw new GitHubError(403, i18nt('GitHub rate-limited this network for anonymous reads. Try again in a few minutes.'));
     if (!res.ok) throw new GitHubError(res.status, `public read failed (${res.status})`);
     return res.text();
   }

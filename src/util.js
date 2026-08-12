@@ -1,4 +1,7 @@
-/* Small shared helpers. No dependencies, by design. */
+/* Small shared helpers. Only dependency: i18n, for display formatting.
+   MONTHS/WD stay English — they are also used to build DATA. */
+
+import { t } from './i18n.js';
 
 export const $  = (s, r = document) => r.querySelector(s);
 export const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -15,8 +18,8 @@ export const addD  = (d, n) => { const x = new Date(d); x.setDate(x.getDate()+n)
 export const dayDiff = (a, b) => Math.round((b - a) / 864e5);
 export const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 export const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-export const fmtDate  = (d) => `${WD[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-export const fmtShort = (s) => { const d = parse(s); return `${d.getDate()} ${MONTHS[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`; };
+export const fmtDate  = (d) => `${t(WD[d.getDay()])} ${d.getDate()} ${t(MONTHS[d.getMonth()])} ${d.getFullYear()}`;
+export const fmtShort = (s) => { const d = parse(s); return `${d.getDate()} ${t(MONTHS[d.getMonth()])} ${String(d.getFullYear()).slice(2)}`; };
 export const HHMM = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
 
 /* The day a timestamp belongs to. With dayBoundary = 3, anything logged
@@ -29,8 +32,8 @@ export function dayOf(date, boundary = 0) {
 }
 export const rel = (d, today) => {
   const n = dayDiff(d, today);
-  return n === 0 ? 'today' : n === 1 ? 'yesterday' : n < 7 ? `${n}d ago`
-    : n < 35 ? `${Math.round(n/7)}w ago` : `${Math.round(n/30)}mo ago`;
+  return n === 0 ? t('today') : n === 1 ? t('yesterday') : n < 7 ? t('{0}d ago', n)
+    : n < 35 ? t('{0}w ago', Math.round(n / 7)) : t('{0}mo ago', Math.round(n / 30));
 };
 
 /* ── misc ────────────────────────────────────────────────── */

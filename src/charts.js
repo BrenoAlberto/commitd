@@ -9,6 +9,7 @@
 import { key, parse, addD, dayDiff, MONTHS, WD, esc, fmtShort } from './util.js';
 import { step, shade } from './theme.js';
 import { S } from './store.js';
+import { t as tr } from './i18n.js';
 import { unifiedDays, branchLevel, inLife, isAbstain, targetAt, weekdayProfile } from './model.js';
 
 export const gridRange = (today) => {
@@ -25,7 +26,7 @@ export function yearGrid(vault, { branch = null, topic = null, lanes = false } =
   for (let i = 0; i < 371; i++) {
     const d = addD(start, i), dk = key(d), wk = Math.floor(i / 7);
     if (d.getDay() === 0 && d.getMonth() !== lastM && d.getDate() <= 7) {
-      months += `<span style="left:${wk * 16}px">${MONTHS[d.getMonth()]}</span>`; lastM = d.getMonth();
+      months += `<span style="left:${wk * 16}px">${tr(MONTHS[d.getMonth()])}</span>`; lastM = d.getMonth();
     }
     if (d > today) { cells += '<div class="c oor"></div>'; continue; }
     let lvl = 0, rl = false, mark = '', cellSlot = slot;
@@ -48,10 +49,10 @@ export function yearGrid(vault, { branch = null, topic = null, lanes = false } =
     vault.branches.some(b => (b.checkedOut || b.mergedAt) && b.group === g.id)) : [];
   const legend = byBranch
     ? usedGroups.map(g => `<span class="lgg"><i style="background:${step(g.slot, 3, S.theme)}"></i>${esc(g.label)}</span>`).join('')
-    : `<span>less</span>${[0, 1, 2, 3, 4].map(l => `<div class="c" style="background:${step(slot, l, S.theme)}"></div>`).join('')}<span>more</span>`;
+    : `<span>${tr('less')}</span>${[0, 1, 2, 3, 4].map(l => `<div class="c" style="background:${step(slot, l, S.theme)}"></div>`).join('')}<span>${tr('more')}</span>`;
   const modeCtl = uni ? `<span class="gmode">
-      <button class="${S.gridMode === 'heat' ? 'on' : ''}" data-gridmode="heat">heat</button>
-      <button class="${S.gridMode === 'branches' ? 'on' : ''}" data-gridmode="branches">by branch</button></span>` : '';
+      <button class="${S.gridMode === 'heat' ? 'on' : ''}" data-gridmode="heat">${tr('heat')}</button>
+      <button class="${S.gridMode === 'branches' ? 'on' : ''}" data-gridmode="branches">${tr('by branch')}</button></span>` : '';
   let laneHTML = '', laneLbs = '';
   if (lanes && branch) {
     branch.topics.filter(t => !t.implicit).forEach((t) => {
@@ -66,7 +67,7 @@ export function yearGrid(vault, { branch = null, topic = null, lanes = false } =
   }
   return `<div class="gcols">
     <div class="grail" style="width:${lanes && laneLbs ? 134 : 34}px">
-      <div class="gdays"><span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span></div>
+      <div class="gdays"><span></span><span>${tr('Mon')}</span><span></span><span>${tr('Wed')}</span><span></span><span>${tr('Fri')}</span><span></span></div>
       ${laneLbs ? `<div class="lanelbs">${laneLbs}</div>` : ''}
     </div>
     <div class="gridwrap"><div class="gmain" style="width:848px">
@@ -114,7 +115,7 @@ export function sparkGrid(vault, b) {
 export function monthStrip(vault) {
   const t = parse(vault.today), end = addD(t, 6 - t.getDay()), start = addD(end, -27);
   const u = unifiedDays(vault, start, 28);
-  let out = WD.map(w => `<div class="lb">${w[0]}</div>`).join('');
+  let out = WD.map(w => `<div class="lb">${tr(w)[0].toUpperCase()}</div>`).join('');
   for (let i = 0; i < 28; i++) {
     const d = addD(start, i), dk = key(d);
     if (d > t) { out += '<div class="scell oor"></div>'; continue; }
@@ -138,20 +139,20 @@ export function metricChart(vault, t) {
   const runs = []; let cur = null;
   vals.forEach((x, i) => { if (!cur || cur.tg !== x.tg) { cur = { tg: x.tg, s: i, e: i }; runs.push(cur); } else cur.e = i; });
   return `<div class="card"><div class="card-h"><h3>${esc(m0.label)}</h3>
-    <span class="muted mono" style="margin-left:auto;font-size:11px">${t.closed ? 'final 30 days' : 'last 30 days'} ·
-      target ${runs.map(r => r.tg).join(' → ')}${esc(m0.unit || '')}</span></div>
+    <span class="muted mono" style="margin-left:auto;font-size:11px">${t.closed ? tr('final 30 days') : tr('last 30 days')} ·
+      ${tr('target')} ${runs.map(r => r.tg).join(' → ')}${esc(m0.unit || '')}</span></div>
     <div class="card-b" style="--bc:${t.color}">
       <div class="bars">
         ${vals.map(x => `<div class="bar${x.v ? '' : ' zero'}" style="height:${Math.max(2, x.v / mx * 100)}%"
           data-tipd="${x.dk}" data-tipv="${x.v}" data-tipl="${esc(m0.label)}"></div>`).join('')}
         ${runs.map(r => `<div class="tline" style="bottom:${(r.tg / mx * 120).toFixed(1)}px;left:${r.s / 30 * 100}%;right:${(1 - (r.e + 1) / 30) * 100}%"></div>`).join('')}
       </div>
-      <div class="axis"><span>${fmtShort(vals[0].dk)}</span><span>${t.closed ? fmtShort(t.closed) : 'today'}</span></div>
+      <div class="axis"><span>${fmtShort(vals[0].dk)}</span><span>${t.closed ? fmtShort(t.closed) : tr('today')}</span></div>
     </div></div>`;
 }
 export function weekdayCard(list, color, note = '') {
   const rows = weekdayProfile(list), mx = Math.max(...rows.map(r => r.n)) || 1;
-  return `<div class="card"><div class="card-h"><h3>Weekday profile</h3>
+  return `<div class="card"><div class="card-h"><h3>${tr('Weekday profile')}</h3>
     ${note ? `<span class="muted mono" style="margin-left:auto;font-size:11px">${esc(note)}</span>` : ''}</div>
     <div class="card-b" style="--bc:${color}">${rows.map(r =>
       `<div class="wd"><span class="lb">${r.day}</span><span class="track"><span class="fill" style="width:${r.n / mx * 100}%"></span></span>
@@ -161,8 +162,8 @@ export function hourChart(all) {
   const h = new Array(24).fill(0);
   all.forEach(c => h[+String(c.ts).slice(11, 13) || 0]++);
   const mx = Math.max(...h) || 1;
-  return `<div class="card"><div class="card-h"><h3>When you commit</h3>
-    <span class="muted mono" style="margin-left:auto;font-size:11px">all branches</span></div>
+  return `<div class="card"><div class="card-h"><h3>${tr('When you commit')}</h3>
+    <span class="muted mono" style="margin-left:auto;font-size:11px">${tr('all branches')}</span></div>
     <div class="card-b" style="--bc:${shade(2, .6)}">
       <div class="bars">${h.map((v, i) => `<div class="bar${v ? '' : ' zero'}" style="height:${Math.max(2, v / mx * 100)}%"
         data-tiph="${i}" data-tipv="${v}"></div>`).join('')}</div>

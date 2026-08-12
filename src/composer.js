@@ -9,7 +9,8 @@
 
 import { $, $$, esc, slug, key } from './util.js';
 import { S, store } from './store.js';
-import { CADENCES, METRIC_TYPES, targetAt, dueToday, isAbstain } from './model.js';
+import { t as tr } from './i18n.js';
+import { CADENCES, METRIC_TYPES, targetAt, dueToday, isAbstain, allTags } from './model.js';
 import { shade, slotOf } from './theme.js';
 import { openSheet, closeAll, fitSheet, toast } from './ui.js';
 import * as A from './actions.js';
@@ -41,11 +42,11 @@ function composerPick(dk, q) {
   $('#composer').style.removeProperty('--bc');
   openSheet('#composer', {
     head: `<span class="pr">$</span><span class="mono" style="font-size:14px">git commit</span>
-      <input id="pInput" placeholder="which branch?" autocomplete="off" spellcheck="false" value="${esc(q)}">
+      <input id="pInput" placeholder="${tr('which branch?')}" autocomplete="off" spellcheck="false" value="${esc(q)}">
       <button class="iconbtn" data-close>✕</button>`,
     body: `<div id="pList"></div>`,
-    foot: `<span class="muted mono" style="font-size:11px"><kbd>↑↓</kbd> pick &nbsp; <kbd>↵</kbd> select</span>
-      <a class="peek" id="pNew" style="margin-left:auto;cursor:pointer">＋ new branch</a>`,
+    foot: `<span class="muted mono" style="font-size:11px"><kbd>↑↓</kbd> ${tr('pick')} &nbsp; <kbd>↵</kbd> ${tr('select')}</span>
+      <a class="peek" id="pNew" style="margin-left:auto;cursor:pointer">${tr('＋ new branch')}</a>`,
   });
   $('[data-close]').onclick = closeAll;
   $('#pNew').onclick = () => { closeAll(); openWizard(); };
@@ -58,14 +59,14 @@ function composerPick(dk, q) {
     psel = Math.max(0, Math.min(psel, list.length - 1));
     let out = '', lastR = -1;
     list.forEach((x, i) => {
-      if (x.r !== lastR && !qq) { lastR = x.r; out += `<div class="psec">${['Due today', 'Checked out', 'Parked'][x.r]}</div>`; }
+      if (x.r !== lastR && !qq) { lastR = x.r; out += `<div class="psec">${[tr('Due today'), tr('Checked out'), tr('Parked')][x.r]}</div>`; }
       out += `<button class="pitem${i === psel ? ' sel' : ''}" data-pick="${esc(x.t.full)}" style="--bc:${x.b.color}">
         <span class="sw"></span><span>${esc(x.b.emoji)}</span><span class="nm">${esc(x.t.full)}</span>
-        <span class="d">${esc((x.t.metrics || []).map(m => m.k).join(' · ') || 'message only')}</span></button>`;
+        <span class="d">${esc((x.t.metrics || []).map(m => m.k).join(' · ') || tr('message only'))}</span></button>`;
     });
     $('#pList').innerHTML = list.length ? `<div class="plist" style="padding:11px">${out}</div>`
-      : `<div class="muted" style="padding:26px 16px;font-size:13px">No branch matches.
-         <b>Enter</b> creates one called <span class="mono">${esc(inp.value)}</span>.</div>`;
+      : `<div class="muted" style="padding:26px 16px;font-size:13px">${tr('No branch matches.')}
+         <b>Enter</b> ${tr('creates one called')} <span class="mono">${esc(inp.value)}</span>.</div>`;
     $$('#pList [data-pick]').forEach(el => el.onclick = () => {
       target = S.vault.branches.flatMap(b => b.topics).find(t => t.full === el.dataset.pick);
       composerForm(target, dk);
@@ -91,22 +92,38 @@ function composerForm(t, dk) {
   openSheet('#composer', {
     head: `<span class="pr">$</span><span class="mono" style="font-size:14px">git commit</span>
       <button class="chip mono" id="cSwap" style="height:26px;cursor:pointer">
-        <span class="sw" style="background:${b.color};box-shadow:none"></span>${esc(t.full)} <span class="muted">change</span></button>
+        <span class="sw" style="background:${b.color};box-shadow:none"></span>${esc(t.full)} <span class="muted">${tr('change')}</span></button>
       ${dk !== S.vault.today ? `<span class="chip mono" style="height:26px;font-size:11px">--date ${dk}</span>` : ''}
       <button class="iconbtn" data-close style="margin-left:auto">✕</button>`,
     body: `<div style="padding:18px">
-      <div class="field"><label>Message</label>
-        <textarea class="inp" id="cMsg" placeholder="what actually happened — one honest line"></textarea></div>
-      ${(t.metrics || []).length ? `<div class="field"><label>Metrics · defined on ${esc(t.implicit ? 'this branch' : t.full)}</label>
+      <div class="field"><label>${tr('Message')}</label>
+        <textarea class="inp" id="cMsg" placeholder="${tr('what actually happened — one honest line')}"></textarea></div>
+      ${(t.metrics || []).length ? `<div class="field"><label>${tr('Metrics · defined on {0}', esc(t.implicit ? tr('this branch') : t.full))}</label>
         <div class="mgrid">${t.metrics.map(m => `<input class="inp" id="m_${esc(m.k)}" type="number" step="any"
-          placeholder="${esc(m.label)}${m.unit ? ` (${esc(m.unit)})` : ''} · target ${targetAt(m, dk)}">`).join('')}</div></div>` : ''}
+          placeholder="${esc(m.label)}${m.unit ? ` (${esc(m.unit)})` : ''} · ${tr('target {0}', targetAt(m, dk))}">`).join('')}</div></div>` : ''}
       <div class="field" style="margin-bottom:0"><label>Tags</label>
-        <input class="inp" id="cTags" placeholder="comma, separated, optional"></div></div>`,
+        <input class="inp" id="cTags" placeholder="${tr('comma, separated, optional')}">
+        <div class="tagsug" id="cTagSug"></div></div></div>`,
     foot: `<span class="muted mono" style="font-size:11px;margin-right:auto">→ branches/${esc(t.implicit ? b.id : `${b.id}/topics/${t.id}`)}/log/${dk.slice(0, 7)}.jsonl</span>
-      <button class="btn btn-g" data-close>cancel</button><button class="btn btn-p" id="cDo">commit</button>`,
+      <button class="btn btn-g" data-close>${tr('cancel')}</button><button class="btn btn-p" id="cDo">commit</button>`,
   });
   $$('[data-close]').forEach(el => el.onclick = closeAll);
   $('#cSwap').onclick = () => { psel = 0; composerPick(dk, ''); };
+  /* one tap re-uses a tag you've used before; typing still works as ever */
+  const tagInp = $('#cTags');
+  const curTags = () => tagInp.value.split(',').map(x => x.trim()).filter(Boolean);
+  const drawTags = () => {
+    const cur = curTags();
+    $('#cTagSug').innerHTML = allTags(S.vault).slice(0, 12).map(tg =>
+      `<button type="button" class="${cur.includes(tg) ? 'on' : ''}" data-tag="${esc(tg)}">${esc(tg)}</button>`).join('');
+    $$('#cTagSug [data-tag]').forEach(el => el.onclick = () => {
+      const tg = el.dataset.tag, cur2 = curTags();
+      tagInp.value = (cur2.includes(tg) ? cur2.filter(x => x !== tg) : [...cur2, tg]).join(', ');
+      drawTags();
+    });
+  };
+  drawTags();
+  tagInp.oninput = drawTags;
   $('#cDo').onclick = async () => {
     const metrics = {};
     (t.metrics || []).forEach(m => { const v = $('#m_' + m.k)?.value; if (v !== '' && v != null) metrics[m.k] = +v; });
@@ -141,48 +158,46 @@ function drawWizard() {
         <div class="mgrid3" style="grid-template-columns:64px 1fr">
           <input class="inp" id="w_emoji" value="${esc(wiz.emoji)}" style="text-align:center;font-size:19px">
           <input class="inp" id="w_title" value="${esc(wiz.title)}"
-            placeholder="${t ? 'What is the current focus? e.g. Couch to 5K' : 'What are you building? e.g. Gym, Reading, Quit smoking'}"></div>
-        <div class="hint">→ <span class="mono">${esc(t ? `${t}/${id}` : id)}</span> · stored at
+            placeholder="${t ? tr('What is the current focus? e.g. Couch to 5K') : tr('What are you building? e.g. Gym, Reading, Quit smoking')}"></div>
+        <div class="hint">→ <span class="mono">${esc(t ? `${t}/${id}` : id)}</span> ${tr('· stored at')}
           <span class="mono">branches/${esc(t ? `${t}/topics/${id}` : id)}/</span></div></div>
-      ${t ? `<div class="wsec"><label class="lbl" style="display:block;margin-bottom:8px">Goal — one sentence</label>
-        <input class="inp" id="w_goal" value="${esc(wiz.goal)}" placeholder="Run 5K without stopping, by the end of March.">
-        <div class="hint">Cadence is inherited from <span class="mono">${esc(t)}</span>. A topic branch never has its
-        own streak — that is the whole point.</div></div>`
-      : `<div class="wsec"><label class="lbl" style="display:block;margin-bottom:8px">Group</label>
+      ${t ? `<div class="wsec"><label class="lbl" style="display:block;margin-bottom:8px">${tr('Goal — one sentence')}</label>
+        <input class="inp" id="w_goal" value="${esc(wiz.goal)}" placeholder="${tr('Run 5K without stopping, by the end of March.')}">
+        <div class="hint">${tr('Cadence is inherited from')} <span class="mono">${esc(t)}</span>. ${tr('A topic branch never has its own streak — that is the whole point.')}</div></div>`
+      : `<div class="wsec"><label class="lbl" style="display:block;margin-bottom:8px">${tr('Group')}</label>
         <div class="chipsel">${S.vault.groups.map(g => `<button class="${wiz.group === g.id ? 'on' : ''}" data-wg="${g.id}">
           <span style="color:${shade(g.slot, .6)}">●</span> ${esc(g.label)}</button>`).join('')}</div>
-        <div class="hint">Groups own the colour, so branch colours stay colourblind-safe past eight branches.</div></div>
-      <div class="wsec"><label class="lbl" style="display:block;margin-bottom:8px">Cadence</label>
+        <div class="hint">${tr('Groups own the colour, so branch colours stay colourblind-safe past eight branches.')}</div></div>
+      <div class="wsec"><label class="lbl" style="display:block;margin-bottom:8px">${tr('Cadence')}</label>
         <div class="chipsel">${CADENCES.map(([k, l]) => `<button class="${wiz.cadence.type === k ? 'on' : ''}" data-wc="${k}">${l}</button>`).join('')}</div>
         ${/n_per/.test(wiz.cadence.type) ? `<div class="row" style="margin-top:10px">
           <input class="inp" id="w_n" type="number" min="1" value="${wiz.cadence.n}" style="width:80px">
-          <span class="hint" style="margin:0">times per ${wiz.cadence.type === 'n_per_week' ? 'week' : 'month'} — rest days don't break the streak</span></div>` : ''}
-        ${wiz.cadence.type === 'abstain' ? `<div class="hint">Inverted: every day that passes commits itself, and a commit is a relapse.</div>` : ''}
+          <span class="hint" style="margin:0">${tr("times per {0} — rest days don't break the streak", wiz.cadence.type === 'n_per_week' ? tr('week') : tr('month'))}</span></div>` : ''}
+        ${wiz.cadence.type === 'abstain' ? `<div class="hint">${tr('Inverted: every day that passes commits itself, and a commit is a relapse.')}</div>` : ''}
       </div>`}
-      <div class="wsec"><label class="lbl" style="display:block;margin-bottom:10px">Metrics</label>
+      <div class="wsec"><label class="lbl" style="display:block;margin-bottom:10px">${tr('Metrics')}</label>
         ${wiz.metrics.map((m, i) => `<div class="mrow">
-          <input class="inp" data-mi="${i}" data-mf="label" value="${esc(m.label)}" placeholder="Label e.g. Minutes">
-          <select class="inp" data-mi="${i}" data-mf="type">${METRIC_TYPES.map(([k, l]) => `<option value="${k}"${m.type === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
-          <input class="inp" data-mi="${i}" data-mf="unit" value="${esc(m.unit)}" placeholder="unit">
+          <input class="inp" data-mi="${i}" data-mf="label" value="${esc(m.label)}" placeholder="${tr('Label e.g. Minutes')}">
+          <select class="inp" data-mi="${i}" data-mf="type">${METRIC_TYPES.map(([k, l]) => `<option value="${k}"${m.type === k ? ' selected' : ''}>${tr(l)}</option>`).join('')}</select>
+          <input class="inp" data-mi="${i}" data-mf="unit" value="${esc(m.unit)}" placeholder="${tr('unit')}">
           <select class="inp" data-mi="${i}" data-mf="dir">
             <option value="at_least"${m.dir === 'at_least' ? ' selected' : ''}>≥</option>
             <option value="at_most"${m.dir === 'at_most' ? ' selected' : ''}>≤</option></select>
-          <input class="inp" data-mi="${i}" data-mf="target" value="${esc(m.target)}" placeholder="target" type="number" step="any">
+          <input class="inp" data-mi="${i}" data-mf="target" value="${esc(m.target)}" placeholder="${tr('target')}" type="number" step="any">
           <button class="mdel" data-mdel="${i}">✕</button></div>`).join('')}
-        <button class="madd" id="wAdd">＋ add a metric</button>
-        <div class="hint">Leave this empty for a message-only branch. Targets can be raised later without rewriting
-          history — they are stored as a dated list.</div></div>
-      ${t ? '' : `<div class="wsec"><label class="lbl" style="display:block;margin-bottom:8px">README — your why</label>
-        <textarea class="inp" id="w_why" placeholder="The sentence you'll need to read at 11pm when you don't want to.">${esc(wiz.why)}</textarea></div>`}
-      <div class="wsec"><div class="preview"><div class="pl">Preview · what committing will look like</div>
-        <div class="field" style="margin-bottom:10px"><label>Message</label>
-          <div class="inp muted" style="font-size:13px">what actually happened — one honest line</div></div>
+        <button class="madd" id="wAdd">${tr('＋ add a metric')}</button>
+        <div class="hint">${tr('Leave this empty for a message-only branch. Targets can be raised later without rewriting history — they are stored as a dated list.')}</div></div>
+      ${t ? '' : `<div class="wsec"><label class="lbl" style="display:block;margin-bottom:8px">${tr('README — your why')}</label>
+        <textarea class="inp" id="w_why" placeholder="${tr("The sentence you'll need to read at 11pm when you don't want to.")}">${esc(wiz.why)}</textarea></div>`}
+      <div class="wsec"><div class="preview"><div class="pl">${tr('Preview · what committing will look like')}</div>
+        <div class="field" style="margin-bottom:10px"><label>${tr('Message')}</label>
+          <div class="inp muted" style="font-size:13px">${tr('what actually happened — one honest line')}</div></div>
         ${mets.length ? `<div class="mgrid">${mets.map(m => `<div class="inp muted" style="font-size:12.5px">${esc(m.label)}${
-          m.unit ? ` (${esc(m.unit)})` : ''}${m.target !== '' ? ` · target ${m.dir === 'at_most' ? '≤' : '≥'} ${esc(m.target)}` : ''}</div>`).join('')}</div>`
-          : '<div class="hint" style="margin:0">No metrics — the grid will show <b>did you show up</b>.</div>'}
+          m.unit ? ` (${esc(m.unit)})` : ''}${m.target !== '' ? ` · ${tr('target')} ${m.dir === 'at_most' ? '≤' : '≥'} ${esc(m.target)}` : ''}</div>`).join('')}</div>`
+          : `<div class="hint" style="margin:0">${tr('No metrics — the grid will show <b>did you show up</b>.')}</div>`}
       </div></div></div>`,
-    foot: `<button class="btn btn-g" data-close>cancel</button>
-      <button class="btn btn-p" id="wDo">${t ? 'checkout -b' : 'create branch'}</button>`,
+    foot: `<button class="btn btn-g" data-close>${tr('cancel')}</button>
+      <button class="btn btn-p" id="wDo">${t ? 'checkout -b' : tr('create branch')}</button>`,
   });
   $$('[data-close]').forEach(el => el.onclick = closeAll);
   const bind = (sel, fn) => { const e = $(sel); if (e) e.oninput = () => fn(e.value); };
